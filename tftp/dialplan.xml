@@ -1,0 +1,16 @@
+<DIALTEMPLATE>
+  <!-- 4 digit SIPcord extensions (1000-9999) - dial immediately -->
+  <TEMPLATE MATCH="1..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="2..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="3..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="4..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="5..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="6..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="7..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="8..." TIMEOUT="0"/>
+  <TEMPLATE MATCH="9..." TIMEOUT="0"/>
+  <!-- Dial immediately when # is pressed, strip the # -->
+  <TEMPLATE MATCH="*#" TIMEOUT="0" REWRITE="%1"/>
+  <!-- Anything else, wait 5 seconds then dial -->
+  <TEMPLATE MATCH="*" TIMEOUT="5"/>
+</DIALTEMPLATE>

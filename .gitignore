@@ -1,0 +1,26 @@
+# Secrets — never commit
+.env
+
+# Personal phone config — use the .example versions as templates
+SIPDefault.cnf
+SIP_*.cnf
+
+# Cisco firmware — do not redistribute publicly
+*.sb2
+*.tar
+*.bin
+*.sbn
+*.loads
+
+# Generated at runtime by fetch.py
+http/idle.xml
+http/infoservices.xml
+http/services.xml
+http/.speedtest_cache.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Personal docs
+*.docx
