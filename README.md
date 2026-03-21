@@ -29,11 +29,11 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 
 ## Requirements
 
-- Cisco 7940G or 7960G running SIP firmware `P0S3-8-12-00`
+- Cisco 7940G (tested on) or 7960G.
 - A [SIPcord](https://sipcord.net) account
 - Docker + Docker Compose on a machine accessible from the phone's LAN
 - A Discord bot token ([create one here](https://discord.com/developers))
-- The Cisco SIP firmware files (not included — source these yourself)
+- The Cisco SIP firmware files for SIP firmware `P0S3-8-12-00` (not included — source these yourself)
 
 ---
 
