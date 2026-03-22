@@ -72,6 +72,8 @@ nano tftp/SIP001122334455.cnf
 
 Place firmware files (`.sb2`, `.bin`, `.sbn`, `.loads`, `.tar`) in the `tftp/` directory - these are not included in the repo.
 
+The phone directory is configured via `DIRECTORY_ENTRY_*` variables in `.env` and served automatically — no static file needed.
+
 ### 4. Start the containers
 
 ```bash
@@ -98,8 +100,10 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 | `MINECRAFT_SERVER_NAME` | My Server | Server name shown on page 9 |
 | `NEWS_BASE_CURRENCY` | GBP | Base currency for exchange rates |
 | `PING_HOST_1_NAME/IP` | Google/8.8.8.8 | Up to 5 configurable ping targets |
-| `DUCKDNS_ADDRESS` | - | DuckDNS address for external ping on page 7 |
+| `DUCKDNS_ADDRESS` | - | DuckDNS address — used as external ping on page 7 |
 | `PRIORITY_LABEL` | priority users | Label for priority users in bot messages |
+| `DIRECTORY_ENTRY_1_NAME` | - | Phone directory entry name (up to 10 entries) |
+| `DIRECTORY_ENTRY_1_NUMBER` | - | Phone directory entry extension number |
 
 ---
 
@@ -123,6 +127,7 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 | `/meowrefresh` | Owner | Force regenerate all pages |
 | `/meowdump` | Owner | Write pages to disk for debugging |
 | `/meowpurge` | Owner | Delete all output files |
+| `/meowrestart` | Owner | Restart the container to apply updated code |
 | `/meowhelp` | Everyone | Meow commands and page guide |
 
 ### Calico

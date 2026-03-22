@@ -36,6 +36,7 @@ import time
 import uuid
 import zoneinfo
 import xml.etree.ElementTree as ET
+from collections import deque
 from datetime import datetime, timezone
 
 # ═══════════════════════════════════════════════════════
@@ -119,6 +120,7 @@ SPEEDTEST_CACHE = os.path.join(OUTPUT_DIR, ".speedtest_cache.json")
 
 STATUS_CACHE = {}
 PAGE_CACHE = {}
+INJECTION_QUEUE = deque()  # thread-safe queue for injection alerts from sync contexts
 
 def save_status_data(key, value):
     STATUS_CACHE[key] = value
@@ -185,6 +187,50 @@ def wrap(text, width=32):
 
 def wrap_full(text):
     return wrap(text, 32)
+
+_INJECTION_PATTERNS = [
+    # Script/HTML injection
+    "<script", "</script", "javascript:", "onerror=", "onload=",
+    # XML injection
+    "<?xml", "<!DOCTYPE", "<!ENTITY",
+    # Cisco XML element injection
+    "<Text>", "</Text>", "<Title>", "</Title>",
+    "<CiscoIPPhone", "</CiscoIPPhone",
+    # Path traversal
+    "../", "..\\",
+    # SQL - only match unambiguous patterns
+    "SELECT *", "SELECT 1", "; DROP ", "; DELETE ", "; INSERT ", "; UPDATE ",
+    "' OR '", '" OR "', "' OR 1", '" OR 1',
+    "UNION SELECT", "UNION ALL",
+]
+
+def looks_like_injection(text: str) -> bool:
+    upper = text.upper()
+    return any(p.upper() in upper for p in _INJECTION_PATTERNS)
+
+def phone_safe(text):
+    """Replace characters the 7940G can't render with ASCII equivalents."""
+    replacements = {
+        '°': 'deg',
+        '£': 'GBP',
+        '€': 'EUR',
+        '\u2018': "'", '\u2019': "'",   # smart single quotes
+        '\u201c': '"', '\u201d': '"',   # smart double quotes
+        '\u2013': '-', '\u2014': '-',   # en dash, em dash
+        '\u2026': '...', '\u00b7': '.',  # ellipsis, middle dot
+        '\u00d7': 'x', '\u00f7': '/',   # multiply, divide
+        '\u00e9': 'e', '\u00e8': 'e', '\u00ea': 'e',  # accented e
+        '\u00e0': 'a', '\u00e1': 'a', '\u00e2': 'a',  # accented a
+        '\u00fc': 'u', '\u00fa': 'u', '\u00fb': 'u',  # accented u
+        '\u00f3': 'o', '\u00f2': 'o', '\u00f4': 'o',  # accented o
+        '\u00ed': 'i', '\u00ec': 'i',                  # accented i
+        '\u00f1': 'n',                                  # tilde n
+        '\u00e7': 'c',                                  # cedilla c
+    }
+    for char, replacement in replacements.items():
+        text = text.replace(char, replacement)
+    # Strip anything still outside printable ASCII range
+    return ''.join(c if 32 <= ord(c) < 127 or c == '\n' else '?' for c in text)
 
 def ping(host):
     for port in [80, 443, 53]:
@@ -342,12 +388,12 @@ def fetch_page1():
         sunrise_str = fmt_sun(dy.get("sunrise", [""])[0])
         sunset_str  = fmt_sun(dy.get("sunset",  [""])[0])
 
-        weather_text = f"--- WEATHER ---\n{desc}\n{temp}°C | Wind {wind}mph"
+        weather_text = phone_safe(f"--- WEATHER ---\n{desc}\n{temp}degC | Wind {wind}mph")
         lines = [
             "--- WEATHER ---",
             f"{desc}",
-            f"Temp:    {temp}°C (feels {feels}°C)",
-            f"High/Low:{t_max}°C / {t_min}°C",
+            f"Temp:    {temp}degC (feels {feels}degC)",
+            f"High/Low:{t_max}degC / {t_min}degC",
             f"Wind:    {wind}mph {compass} (g{gusts}mph)",
             f"Humidity:{humidity}%  Cloud:{cloud}%",
             f"Pressure:{pressure:.0f}hPa",
@@ -356,7 +402,7 @@ def fetch_page1():
             f"Precip:  {precip_day}mm today",
             f"Sunrise: {sunrise_str}  Set:{sunset_str}",
         ]
-        weather_text_full = "\n".join(lines)
+        weather_text_full = phone_safe("\n".join(lines))
 
     write_xml("page1.xml", "Weather", weather_text)
     write_xml("page1_full.xml", "Weather", weather_text_full)
@@ -377,7 +423,7 @@ def fetch_page2():
         for i, item in enumerate(items, 1):
             title = item.find("title")
             if title is not None:
-                t = title.text or ""
+                t = phone_safe(title.text or "")
                 t_short = t if len(t) <= 29 else t[:26] + "..."
                 headlines.append(f"{i}. {t_short}")
                 headlines_full.append(f"{i}. {wrap_full(t)}")
@@ -405,8 +451,9 @@ def fetch_page3():
         eur = rates.get("EUR")
         usd = rates.get("USD")
         if isinstance(eur, (int, float)) and isinstance(usd, (int, float)):
-            exchange_text = f"--- {NEWS_BASE_CURRENCY} RATES ---\n{NEWS_BASE_CURRENCY}1 = €{eur:.4f}\n{NEWS_BASE_CURRENCY}1 = ${usd:.4f}"
-            STATUS_CACHE["exchange"] = f"{NEWS_BASE_CURRENCY}1 = €{eur:.2f} | ${usd:.2f}"
+            currency_symbol = "GBP" if NEWS_BASE_CURRENCY == "GBP" else NEWS_BASE_CURRENCY
+            exchange_text = f"--- {NEWS_BASE_CURRENCY} RATES ---\n{currency_symbol}1 = EUR{eur:.4f}\n{currency_symbol}1 = USD{usd:.4f}"
+            STATUS_CACHE["exchange"] = f"{currency_symbol}1 = EUR{eur:.2f} | USD{usd:.2f}"
             save_status_data("eur", eur)
             save_status_data("usd", usd)
         else:
@@ -451,12 +498,12 @@ def fetch_page4():
         launches = r.json().get("result", [])
         if launches:
             d = launches[0]
-            name = d.get("name", "Unknown")
+            name = phone_safe(d.get("name", "Unknown"))
             win = d.get("win_open") or d.get("t0") or ""
             date_str = win[:16] if win else "TBD"
             vehicle = d.get("vehicle", {}).get("name", "")
             pad = d.get("pad", {}).get("name", "")
-            details = d.get("launch_description") or f"{vehicle} from {pad}"
+            details = phone_safe(d.get("launch_description") or f"{vehicle} from {pad}")
             details_short = wrap(details, 32).split("\n")[0]
             details_full = wrap_full(details)
             space_text = f"--- SPACE ---\n{name}\n{date_str}\n{details_short}"
@@ -485,7 +532,7 @@ def fetch_page5():
         if events:
             pick = random.choice(events[:20])
             year = pick.get("year", "")
-            text_raw = pick.get("text", "")
+            text_raw = phone_safe(pick.get("text", ""))
             text_wrapped = wrap(text_raw, 32)
             text_wrapped_full = wrap_full(text_raw)
             first_line = text_wrapped.split("\n")[0]
@@ -506,9 +553,10 @@ def fetch_page6():
     cat_text_full = "Cat Fact: Unavailable"
     r = safe_get("https://catfact.ninja/fact")
     if r:
-        fact = r.json().get("fact", "")
+        fact = phone_safe(r.json().get("fact", ""))
         fact_wrapped = wrap(fact, 32)
-        cat_text = f"--- CAT FACT ---\n{fact_wrapped}"
+        fact_short = "\n".join(fact_wrapped.split("\n")[:5])
+        cat_text = f"--- CAT FACT ---\n{fact_short}"
         cat_text_full = f"--- CAT FACT ---\n{wrap_full(fact)}"
         STATUS_CACHE["catfact"] = f"Cat fact: {fact_wrapped.split(chr(10))[0]}"[:128]
         save_status_data("cat_fact", fact.replace("\n", " "))
@@ -595,14 +643,24 @@ def fetch_page7():
                 _network = True
                 _service = True
 
-        status_lines = [
+        claude_line = (
+            f"Claude: {claude_ping}" if claude_status == "OK"
+            else f"Claude: {claude_status} ({claude_ping})" if claude_status not in ("DOWN", "Unavailable")
+            else f"Claude: {claude_status}"
+        )
+        discord_line = (
+            f"Discord: {discord_latency}" if discord_svc_status == "OK" and discord_latency != "DOWN"
+            else f"Discord: {discord_svc_status} ({discord_latency})" if discord_svc_status not in ("DOWN", "Unavailable") and discord_latency != "DOWN"
+            else f"Discord: {discord_svc_status if discord_svc_status != 'OK' else 'DOWN'}"
+        )
+        all_status_lines = [
             "--- STATUS ---",
-            f"Claude: {claude_status} ({claude_ping})",
-            f"Discord: {discord_svc_status} ({discord_latency})",
-        ]
+            claude_line,
+            discord_line,
+        ] + ping_lines[1:]  # append all ping hosts (skip "--- PING ---" header)
 
-        page7_lines = status_lines + ping_lines[:4]  # phone shows 7 lines: 3 status + 4 pings
-        page7_full_lines = status_lines + [""] + ping_lines
+        page7_lines = all_status_lines[:7]  # cap at 7 for auto version
+        page7_full_lines = all_status_lines  # full version shows everything
         write_xml("page7.xml", "Status & Pings", "\n".join(page7_lines))
         write_xml("page7_full.xml", "Status & Pings", "\n".join(page7_full_lines))
 
@@ -736,7 +794,7 @@ def fetch_page10():
 
     def fetch_channel(channel):
         cid = channel["id"]
-        cname = channel.get("name", "unknown")
+        cname = phone_safe(channel.get("name", "unknown"))
         try:
             r2 = requests.get(
                 f"https://discord.com/api/v10/channels/{cid}/messages?limit=1",
@@ -754,8 +812,9 @@ def fetch_page10():
         msg = msgs[0]
         if msg.get("author", {}).get("bot", False):
             return None
-        content_raw = msg.get("content", "")
-        author = msg.get("author", {}).get("username", "Unknown")
+        content_raw = phone_safe(msg.get("content", ""))
+        author = phone_safe(msg.get("author", {}).get("username", "Unknown"))
+        author_id = msg.get("author", {}).get("id", 0)
         timestamp = msg.get("timestamp", "")
         if not content_raw and msg.get("attachments"):
             content_raw = "[attachment]"
@@ -763,6 +822,7 @@ def fetch_page10():
             content_raw = "[embed]"
         if not content_raw:
             return None
+        injection_attempt = looks_like_injection(msg.get("content", ""))
         try:
             dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             if dt.tzinfo is None:
@@ -777,9 +837,11 @@ def fetch_page10():
         return {
             "name": cname,
             "author": author,
+            "author_id": author_id,
             "content": content_raw,
             "ts_display": ts_display,
-            "dt": dt
+            "dt": dt,
+            "injection": injection_attempt,
         }
 
     # Fetch all channels in parallel
@@ -795,7 +857,19 @@ def fetch_page10():
     for t in threads:
         t.join(timeout=10)
 
-    channel_data = [ch for ch in results if ch is not None]
+    all_results = [ch for ch in results if ch is not None]
+
+    # Fire silent alerts for any injection attempts, exclude from phone display
+    for ch in all_results:
+        if ch.get("injection"):
+            INJECTION_QUEUE.append({
+                "type": "silent",
+                "user_name": ch["author"],
+                "user_id": ch["author_id"],
+                "source": f"#{ch['name']} (server)",
+                "content": ch["content"],
+            })
+    channel_data = [ch for ch in all_results if not ch.get("injection")]
 
     if not channel_data:
         write_xml("page10.xml", "Discord", "No recent messages found")
@@ -853,6 +927,42 @@ def start_discord_bot():
             await interaction.response.send_message(embed=discord.Embed(title="Only the owner can use this command.", color=discord.Color.red()), ephemeral=True)
             return False
         return True
+
+    async def alert_injection(user: discord.User | discord.Member, source: str, content: str):
+        """DM the owner and send a laughing response to the attacker."""
+        # Warn the attacker
+        try:
+            await user.send(
+                "\U0001f923 Nice try. That won\u2019t work here."
+            )
+        except Exception:
+            pass
+        # Alert the owner
+        for owner_id in OWNER_USER_IDS:
+            try:
+                owner = await client.fetch_user(owner_id)
+                await owner.send(
+                    f"\u26a0\ufe0f **Injection attempt detected**\n"
+                    f"**Source:** {source}\n"
+                    f"**User:** {user.name} (ID: `{user.id}`)\n"
+                    f"**Content:** ```\n{content[:500]}\n```"
+                )
+            except Exception:
+                pass
+
+    async def alert_injection_silent(user_name: str, user_id: int, source: str, content: str):
+        """Silently DM the owner only — used for server messages where we don't want to call out the user publicly."""
+        for owner_id in OWNER_USER_IDS:
+            try:
+                owner = await client.fetch_user(owner_id)
+                await owner.send(
+                    f"\u26a0\ufe0f **Injection attempt detected (server message)**\n"
+                    f"**Source:** {source}\n"
+                    f"**User:** {user_name} (ID: `{user_id}`)\n"
+                    f"**Content:** ```\n{content[:500]}\n```"
+                )
+            except Exception:
+                pass
 
     intents = discord.Intents.default()
     intents.message_content = True
@@ -1082,6 +1192,10 @@ def start_discord_bot():
     )
     async def slash_message(interaction: discord.Interaction, text: str, duration: app_commands.Range[int, 10, 3600] = 300):
         if not await owner_only(interaction): return
+        if looks_like_injection(text):
+            await alert_injection(interaction.user, "/meowmessage", text)
+            await interaction.response.send_message(embed=discord.Embed(title="Nice try. \U0001f923", color=discord.Color.red()), ephemeral=True)
+            return
         idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
         body = wrap_full(text)
         write_xml_refresh("custommsg.xml", "Message", f"--- MESSAGE ---\n{body}", duration, idle_url)
@@ -1203,12 +1317,25 @@ def start_discord_bot():
                 idx += 1
             await asyncio.sleep(300)
 
+    async def drain_injection_queue():
+        """Process injection alerts queued from sync contexts (e.g. fetch_page10 threads)."""
+        while not client.is_closed():
+            while INJECTION_QUEUE:
+                item = INJECTION_QUEUE.popleft()
+                if item["type"] == "silent":
+                    await alert_injection_silent(
+                        item["user_name"], item["user_id"],
+                        item["source"], item["content"]
+                    )
+            await asyncio.sleep(5)
+
     @client.event
     async def on_ready():
         print(f"Discord bot connected as {client.user}")
         await tree.sync()
         print("Slash commands synced")
         asyncio.ensure_future(cycle_status())
+        asyncio.ensure_future(drain_injection_queue())
         threading.Thread(target=fetch_page10, daemon=True).start()
 
     @client.event
@@ -1225,6 +1352,9 @@ def start_discord_bot():
             return
 
         if message.author.id not in PRIORITY_USER_IDS:
+            if looks_like_injection(message.content or ""):
+                await alert_injection(message.author, "DM", message.content or "")
+                return
             last_dm = DM_COOLDOWNS.get(message.author.id)
             if last_dm and (datetime.now() - last_dm).total_seconds() < DM_COOLDOWN_SECONDS:
                 remaining = DM_COOLDOWN_SECONDS - int((datetime.now() - last_dm).total_seconds())
@@ -1236,10 +1366,14 @@ def start_discord_bot():
                 return
             DM_COOLDOWNS[message.author.id] = datetime.now()
 
+        if looks_like_injection(message.content or ""):
+            await alert_injection(message.author, "DM", message.content or "")
+            return
+
         dm_entry = {
             "author": message.author.name,
             "author_id": message.author.id,
-            "text": message.content or "[attachment]",
+            "text": phone_safe(message.content or "[attachment]"),
             "time": datetime.now(),
         }
         if message.author.id in PRIORITY_USER_IDS:
@@ -1292,27 +1426,33 @@ def start_discord_bot():
 
 def fetch_page11():
     if DM_MESSAGE:
-        author = DM_MESSAGE["author"]
-        text = DM_MESSAGE["text"]
+        author = phone_safe(DM_MESSAGE["author"])
+        text = phone_safe(DM_MESSAGE["text"])
         received = DM_MESSAGE["time"].strftime("%H:%M %d/%m")
-        body = f"--- DM RECEIVED ---\nFrom: {author}\nAt: {received}\n\n{wrap_full(text)}"
+        text_short = "\n".join(wrap_full(text).split("\n")[:4])
+        body_auto = f"--- DM RECEIVED ---\nFrom: {author}\nAt: {received}\n{text_short}"
+        body_full = f"--- DM RECEIVED ---\nFrom: {author}\nAt: {received}\n\n{wrap_full(text)}"
     else:
-        body = "--- DM ---\nNo messages yet"
+        body_auto = "--- DM ---\nNo messages yet"
+        body_full = body_auto
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
-    write_xml_refresh("page11.xml", "DM", body, MWI_DM_DURATION, idle_url)
-    write_xml_refresh("page11_full.xml", "DM", body, MWI_DM_DURATION, idle_url)
+    write_xml_refresh("page11.xml", "DM", body_auto, MWI_DM_DURATION, idle_url)
+    write_xml_refresh("page11_full.xml", "DM", body_full, MWI_DM_DURATION, idle_url)
 
 def fetch_page12():
     if DM_MESSAGE_PRIORITY:
-        author = DM_MESSAGE_PRIORITY["author"]
-        text = DM_MESSAGE_PRIORITY["text"]
+        author = phone_safe(DM_MESSAGE_PRIORITY["author"])
+        text = phone_safe(DM_MESSAGE_PRIORITY["text"])
         received = DM_MESSAGE_PRIORITY["time"].strftime("%H:%M %d/%m")
-        body = f"--- DM: {author.upper()} ---\nAt: {received}\n\n{wrap_full(text)}"
+        text_short = "\n".join(wrap_full(text).split("\n")[:4])
+        body_auto = f"--- DM: {author.upper()} ---\nAt: {received}\n{text_short}"
+        body_full = f"--- DM: {author.upper()} ---\nAt: {received}\n\n{wrap_full(text)}"
     else:
-        body = "--- VIP DM ---\nNo messages yet"
+        body_auto = "--- VIP DM ---\nNo messages yet"
+        body_full = body_auto
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
-    write_xml_refresh("page12.xml", "VIP DM", body, MWI_DM_DURATION, idle_url)
-    write_xml_refresh("page12_full.xml", "VIP DM", body, MWI_DM_DURATION, idle_url)
+    write_xml_refresh("page12.xml", "VIP DM", body_auto, MWI_DM_DURATION, idle_url)
+    write_xml_refresh("page12_full.xml", "VIP DM", body_full, MWI_DM_DURATION, idle_url)
 
 # ═══════════════════════════════════════════════════════
 # MENUS
@@ -1607,6 +1747,13 @@ def start_http_server():
 
         def do_GET(self):
             path = self.path.lstrip("/").split("?")[0]
+
+            # Block path traversal attempts
+            if ".." in path or path.startswith("/"):
+                print(f"WARNING: Path traversal attempt from {self.client_address[0]}: {self.path}")
+                self.send_response(400)
+                self.end_headers()
+                return
 
             if path == "health":
                 age = int(time.time() - LAST_FETCH_TIME) if LAST_FETCH_TIME else -1
