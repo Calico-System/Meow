@@ -22,5 +22,8 @@ http/.speedtest_cache.json
 __pycache__/
 *.pyc
 
+# Windows thumbnail cache
+Thumbs.db
+
 # Personal docs
 *.docx

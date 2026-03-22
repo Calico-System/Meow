@@ -49,8 +49,8 @@ cd birch
 ### 2. Configure environment
 
 ```bash
-cp dashboard/.env.example dashboard/.env
-nano dashboard/.env
+cp .env.example .env
+nano .env
 ```
 
 Fill in all values. See `.env.example` for descriptions of each variable.
@@ -69,7 +69,6 @@ Place firmware files (`.sb2`, `.bin`, `.sbn`, `.loads`) in the `tftp/` directory
 ### 4. Start the containers
 
 ```bash
-cd dashboard
 docker compose up -d
 ```
 
@@ -118,11 +117,8 @@ All options are set via `.env` — no need to edit the code. See `.env.example` 
 
 ```
 birch/
-├── dashboard/
-│   ├── fetch.py                  # Main script
-│   ├── docker-compose.yml
-│   ├── .env                      # Your secrets — never committed
-│   └── .env.example              # Template
+├── bot/
+│   └── fetch.py                  # Main script
 ├── tftp/
 │   ├── OS79XX.TXT
 │   ├── dialplan.xml
@@ -130,6 +126,9 @@ birch/
 │   └── SIP_YOURMAC_.cnf.example
 ├── http/
 │   └── logo.bmp
+├── .env                          # Your secrets — never committed
+├── .env.example                  # Template
+├── docker-compose.yml
 ├── .gitignore
 └── README.md
 ```
