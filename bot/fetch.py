@@ -13,7 +13,7 @@ def bootstrap():
         check=False
     )
     if result.returncode != 0:
-        print("WARNING: pip install failed — some features may not work")
+        print("WARNING: pip install failed - some features may not work")
     subprocess.run(["apk", "add", "--no-cache", "curl"], check=False)
     result = subprocess.run(["which", "speedtest"], capture_output=True)
     if result.returncode != 0:
@@ -60,20 +60,24 @@ LOCATION_NAME = os.environ.get("LOCATION_NAME", "Langley Heath")
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN", "")
 DISCORD_GUILD_ID = os.environ.get("DISCORD_GUILD_ID", "")
-OWNER_USER_ID = int(os.environ.get("OWNER_USER_ID", "0"))
-PRIORITY_USER_ID = int(os.environ.get("PRIORITY_USER_ID", "0"))
-PRIORITY_USER_IDS = {PRIORITY_USER_ID, OWNER_USER_ID}
+def _parse_ids(env_key: str) -> set:
+    raw = os.environ.get(env_key, "")
+    return {int(x.strip()) for x in raw.split(",") if x.strip().isdigit()}
+
+OWNER_USER_IDS   = _parse_ids("OWNER_USER_IDS")
+PRIORITY_USER_IDS = _parse_ids("PRIORITY_USER_IDS") | OWNER_USER_IDS
+PRIORITY_LABEL   = os.environ.get("PRIORITY_LABEL", "priority users")
 
 _REQUIRED_ENV = {
     "DISCORD_TOKEN": DISCORD_TOKEN,
     "DISCORD_GUILD_ID": DISCORD_GUILD_ID,
     "TRUENAS_KEY": TRUENAS_KEY,
-    "OWNER_USER_ID": os.environ.get("OWNER_USER_ID", ""),
-    "PRIORITY_USER_ID": os.environ.get("PRIORITY_USER_ID", ""),
+    "OWNER_USER_IDS": os.environ.get("OWNER_USER_IDS", ""),
+    "PRIORITY_USER_IDS": os.environ.get("PRIORITY_USER_IDS", ""),
 }
 for _var, _val in _REQUIRED_ENV.items():
     if not _val:
-        print(f"WARNING: {_var} is not set — related features will not work")
+        print(f"WARNING: {_var} is not set - related features will not work")
 
 IDLE_CYCLE_SECONDS = int(os.environ.get("IDLE_CYCLE_SECONDS", "30"))
 SPEEDTEST_INTERVAL = int(os.environ.get("SPEEDTEST_INTERVAL", "3600"))
@@ -84,7 +88,7 @@ PHONE_SIP_EXTENSION = os.environ.get("PHONE_SIP_EXTENSION", "1001")
 MINECRAFT_SERVER_NAME = os.environ.get("MINECRAFT_SERVER_NAME", "Minecraft")
 NEWS_BASE_CURRENCY = os.environ.get("NEWS_BASE_CURRENCY", "GBP")
 
-# Ping hosts — configure up to 5 via PING_HOST_1_NAME / PING_HOST_1_IP etc.
+# Ping hosts - configure up to 5 via PING_HOST_1_NAME / PING_HOST_1_IP etc.
 # Falls back to just Google if none are set.
 PING_HOSTS = {}
 for _i in range(1, 6):
@@ -208,7 +212,7 @@ def run_fetch_parallel(*funcs, timeout=25):
     for name, t in threads:
         t.join(timeout=timeout)
         if t.is_alive():
-            print(f"WARNING: {name} timed out after {timeout}s — abandoning")
+            print(f"WARNING: {name} timed out after {timeout}s - abandoning")
 
 def run_speedtest():
     print("Running speedtest...")
@@ -832,7 +836,7 @@ def start_discord_bot():
     import asyncio
 
     async def owner_only(interaction: discord.Interaction) -> bool:
-        if interaction.user.id != OWNER_USER_ID:
+        if interaction.user.id not in OWNER_USER_IDS:
             await interaction.response.send_message(embed=discord.Embed(title="Only the owner can use this command.", color=discord.Color.red()), ephemeral=True)
             return False
         return True
@@ -864,7 +868,7 @@ def start_discord_bot():
 
     def build_status_embed():
         latency = round(client.latency * 1000)
-        embed = discord.Embed(title="Birch", color=discord.Color.blurple())
+        embed = discord.Embed(title="Meow", color=discord.Color.blurple())
         embed.add_field(name="Latency", value=f"`{latency}ms`", inline=True)
         if "exchange" in STATUS_CACHE:
             embed.add_field(name="Rates", value=STATUS_CACHE["exchange"], inline=True)
@@ -878,14 +882,14 @@ def start_discord_bot():
             embed.add_field(name="Cat Fact", value=cat, inline=False)
         if "minecraft" in STATUS_CACHE:
             embed.add_field(name="Minecraft", value=STATUS_CACHE["minecraft"], inline=True)
-        embed.set_footer(text="DM me to show a message on the phone screen for 5 mins | Priority user gets top priority")
+        embed.set_footer(text=f"DM me to show a message on the phone screen for 5 mins | {PRIORITY_LABEL.capitalize()} gets top priority")
         return embed
 
-    @tree.command(name="sipping", description="Live status: bot latency, exchange rates, grid, Minecraft")
+    @tree.command(name="birchping", description="Live status: bot latency, exchange rates, grid, Minecraft")
     async def slash_ping(interaction: discord.Interaction):
         await interaction.response.send_message(embed=build_status_embed())
 
-    @tree.command(name="siprefresh", description="Force regenerate all 12 phone pages immediately")
+    @tree.command(name="meowrefresh", description="Force regenerate all 12 phone pages immediately")
     async def slash_refresh(interaction: discord.Interaction):
         if not await owner_only(interaction): return
         embed = discord.Embed(title="Refreshing all pages...", color=discord.Color.yellow())
@@ -905,7 +909,7 @@ def start_discord_bot():
         except Exception as e:
             await interaction.followup.send(embed=discord.Embed(title="Error", description=str(e), color=discord.Color.red()))
 
-    @tree.command(name="sipdump", description="Write all in-memory pages to disk for debugging (auto-deleted after 6 hours)")
+    @tree.command(name="meowdump", description="Write all in-memory pages to disk for debugging (auto-deleted after 6 hours)")
     async def slash_dump(interaction: discord.Interaction):
         if not await owner_only(interaction): return
         embed = discord.Embed(title="Dumping pages to disk...", color=discord.Color.yellow())
@@ -921,7 +925,7 @@ def start_discord_bot():
         except Exception as e:
             await interaction.followup.send(embed=discord.Embed(title="Error", description=str(e), color=discord.Color.red()))
 
-    @tree.command(name="sippurge", description="Delete all XML and JSON output files from disk")
+    @tree.command(name="meowpurge", description="Delete all XML and JSON output files from disk")
     async def slash_purge(interaction: discord.Interaction):
         if not await owner_only(interaction): return
         embed = discord.Embed(title="Purging output files...", color=discord.Color.yellow())
@@ -940,20 +944,19 @@ def start_discord_bot():
         except Exception as e:
             await interaction.followup.send(embed=discord.Embed(title="Error", description=str(e), color=discord.Color.red()))
 
-    @tree.command(name="sipabout", description="What this bot does and how the phone setup works")
-    async def slash_about(interaction: discord.Interaction):
+    @tree.command(name="birchabout", description="Who Birch is")
+    async def slash_birchabout(interaction: discord.Interaction):
         embed = discord.Embed(
             title="Birch",
             description=(
-                "A general-purpose Discord bot with a Cisco 7940G phone dashboard. "
-                "Keeps the phone screen updated with live info: weather, news, exchange rates, "
-                "National Grid carbon intensity, rocket launches, cat facts, Minecraft server "
-                "status, Discord messages, and network health."
+                "I'm Birch. I keep an eye on things.\n"
+                "Weather, news, exchange rates, rocket launches, the grid, your servers - I keep track.\n"
+                "DM me and I'll put it on the screen. Voice messages coming soon.\n"
+                "Part of Calico."
             ),
             color=discord.Color.blurple()
         )
-        embed.add_field(name="DM Feature", value="DM me and your message appears on the phone screen for 5 minutes. The priority user gets top priority.", inline=False)
-        embed.set_footer(text="github.com/YOURUSERNAME/birch")
+        embed.set_footer(text="github.com/Calico-System/Meow")
         await interaction.response.send_message(embed=embed)
 
     PAGE_MAP = {
@@ -991,63 +994,41 @@ def start_discord_bot():
         except Exception as e:
             return fallback_title, f"Error reading page: {e}"
 
-    @tree.command(name="sippage", description="Show a page as it appears on the phone screen (1-12)")
-    @app_commands.describe(page="Page number 1-12")
-    async def slash_page(interaction: discord.Interaction, page: app_commands.Range[int, 1, 12]):
-        if page in LOCKED_PAGES and interaction.user.id != OWNER_USER_ID:
+    @tree.command(name="meowpage", description="Show a phone page (1-12)")
+    @app_commands.describe(page="Page number 1-12", full="Show full untruncated version (default: screen version)")
+    async def slash_page(interaction: discord.Interaction, page: app_commands.Range[int, 1, 12], full: bool = False):
+        if page in LOCKED_PAGES and interaction.user.id not in OWNER_USER_IDS:
             await interaction.response.send_message(embed=discord.Embed(title="That page is private.", color=discord.Color.red()), ephemeral=True)
             return
-        result = get_page_text(page, full=False)
+        result = get_page_text(page, full=full)
         if not result:
             await interaction.response.send_message(embed=discord.Embed(title=f"Page {page} not found", color=discord.Color.red()), ephemeral=True)
             return
         title, text = result
-        embed = discord.Embed(title=f"{page}. {title} (screen)", description=f"```\n{text[:4000]}\n```", color=discord.Color.dark_grey())
+        label = "full" if full else "screen"
+        colour = discord.Color.blurple() if full else discord.Color.dark_grey()
+        embed = discord.Embed(title=f"{page}. {title} ({label})", description=f"```\n{text[:4000]}\n```", color=colour)
         await interaction.response.send_message(embed=embed)
 
-    @tree.command(name="sippagefull", description="Show a page in full scrollable form with no truncation (1-12)")
-    @app_commands.describe(page="Page number 1-12")
-    async def slash_page_full(interaction: discord.Interaction, page: app_commands.Range[int, 1, 12]):
-        if page in LOCKED_PAGES and interaction.user.id != OWNER_USER_ID:
-            await interaction.response.send_message(embed=discord.Embed(title="That page is private.", color=discord.Color.red()), ephemeral=True)
-            return
-        result = get_page_text(page, full=True)
-        if not result:
-            await interaction.response.send_message(embed=discord.Embed(title=f"Page {page} not found", color=discord.Color.red()), ephemeral=True)
-            return
-        title, text = result
-        embed = discord.Embed(title=f"{page}. {title} (full)", description=f"```\n{text[:4000]}\n```", color=discord.Color.blurple())
-        await interaction.response.send_message(embed=embed)
-
-    @tree.command(name="sipall", description="Show all 12 phone pages as they appear on screen")
-    async def slash_all(interaction: discord.Interaction):
+    @tree.command(name="meowall", description="Show all phone pages")
+    @app_commands.describe(full="Show full untruncated versions (default: screen versions)")
+    async def slash_all(interaction: discord.Interaction, full: bool = False):
         if not await owner_only(interaction): return
-        await interaction.response.send_message(embed=discord.Embed(title="Fetching all pages...", color=discord.Color.blurple()))
+        label = "full" if full else "screen"
+        await interaction.response.send_message(embed=discord.Embed(title=f"Fetching all pages ({label})...", color=discord.Color.blurple()))
         for num in sorted(PAGE_MAP.keys()):
-            if num in LOCKED_PAGES and interaction.user.id != OWNER_USER_ID:
+            if num in LOCKED_PAGES and interaction.user.id not in OWNER_USER_IDS:
                 continue
-            result = get_page_text(num, full=False)
+            result = get_page_text(num, full=full)
             if not result:
                 continue
             title, text = result
-            embed = discord.Embed(title=f"{num}. {title}", description=f"```\n{text[:4000]}\n```", color=discord.Color.dark_grey())
+            colour = discord.Color.blurple() if full else discord.Color.dark_grey()
+            suffix = " (full)" if full else ""
+            embed = discord.Embed(title=f"{num}. {title}{suffix}", description=f"```\n{text[:4000]}\n```", color=colour)
             await interaction.followup.send(embed=embed)
 
-    @tree.command(name="sipallfull", description="Show all 12 phone pages in full untruncated scrollable form")
-    async def slash_all_full(interaction: discord.Interaction):
-        if not await owner_only(interaction): return
-        await interaction.response.send_message(embed=discord.Embed(title="Fetching all pages (full)...", color=discord.Color.blurple()))
-        for num in sorted(PAGE_MAP.keys()):
-            if num in LOCKED_PAGES and interaction.user.id != OWNER_USER_ID:
-                continue
-            result = get_page_text(num, full=True)
-            if not result:
-                continue
-            title, text = result
-            embed = discord.Embed(title=f"{num}. {title} (full)", description=f"```\n{text[:4000]}\n```", color=discord.Color.blurple())
-            await interaction.followup.send(embed=embed)
-
-    @tree.command(name="siptest", description="Push a calibration ruler to the phone screen")
+    @tree.command(name="meowtest", description="Push a calibration ruler to the phone screen")
     async def slash_test(interaction: discord.Interaction):
         if not await owner_only(interaction): return
         lines = [
@@ -1070,7 +1051,7 @@ def start_discord_bot():
             color=discord.Color.yellow()
         ))
 
-    @tree.command(name="sipmessage", description="Push a custom message to the phone screen for a set duration")
+    @tree.command(name="meowmessage", description="Push a custom message to the phone screen for a set duration")
     @app_commands.describe(
         text="The message to display on the phone screen",
         duration="How long to show it in seconds (default 300, max 3600)"
@@ -1087,7 +1068,7 @@ def start_discord_bot():
             color=discord.Color.green()
         ))
 
-    @tree.command(name="sipstatus", description="Show what page the phone is currently displaying")
+    @tree.command(name="meowstatus", description="Show what page the phone is currently displaying")
     async def slash_status(interaction: discord.Interaction):
         if not await owner_only(interaction): return
         now = datetime.now()
@@ -1117,44 +1098,68 @@ def start_discord_bot():
         embed.add_field(name="Last fetch", value=last_fetch, inline=True)
         await interaction.response.send_message(embed=embed)
 
-    @tree.command(name="siphelp", description="Full command list, page key, and usage guide")
-    async def slash_help(interaction: discord.Interaction):
-        is_owner = interaction.user.id == OWNER_USER_ID
+    @tree.command(name="birchhelp", description="Birch commands and DM usage")
+    async def slash_birchhelp(interaction: discord.Interaction):
+        is_owner = interaction.user.id in OWNER_USER_IDS
+        commands_public = (
+            "`/birchping` - live status and latency\n"
+            "`/birchabout` - who Birch is\n"
+            "`/birchhelp` - this message\n"
+            "`/meowhelp` - Meow system commands"
+        )
+        advanced = (
+            "DM Birch to show a message on the phone screen for 5 minutes.\n"
+            f"{PRIORITY_LABEL.capitalize()} go to page 12 and override everything.\n"
+            "All other DMs go to page 11 and override normal rotation.\n"
+            "Network issues force page 7 (Status & Pings).\n"
+            "Page 10 (Discord) updates within 30s of any new server message."
+        )
+        embed = discord.Embed(title="Birch", color=discord.Color.blurple())
+        embed.add_field(name="Commands", value=commands_public, inline=False)
+        embed.add_field(name="DM Usage", value=advanced, inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    @tree.command(name="meowhelp", description="Meow system commands and phone page guide")
+    async def slash_meowhelp(interaction: discord.Interaction):
+        is_owner = interaction.user.id in OWNER_USER_IDS
         page_key = "\n".join(
             f"{n:2}. {title:<18} {desc}"
             for n, (_, _f, title, desc) in sorted(PAGE_MAP.items())
             if n not in LOCKED_PAGES or is_owner
         )
         commands_public = (
-            "`/sipping` — live status summary\n"
-            "`/sippage <1-12>` — page as it appears on screen\n"
-            "`/sippagefull <1-12>` — full untruncated page\n"
-            "`/sipabout` — what this bot does\n"
-            "`/siphelp` — this message"
+            "`/meowpage <1-12> [full]` - show a phone page (add full:True for untruncated)\n"
+            "`/meowhelp` - this message"
         )
         commands_owner = (
-            "`/sipall` — all pages as they appear on screen\n"
-            "`/sipallfull` — all pages in full untruncated form\n"
-            "`/siprefresh` — regenerate all pages immediately\n"
-            "`/siptest` — push calibration ruler to phone screen\n"
-            "`/sipmessage <text> [duration]` — push custom message to phone\n"
-            "`/sipstatus` — show current page and rotation state\n"
-            "`/sipdump` — write pages to disk for debugging\n"
-            "`/sippurge` — delete all output files from disk"
+            "`/meowall [full]` - show all phone pages (add full:True for untruncated)\n"
+            "`/meowrefresh` - regenerate all pages immediately\n"
+            "`/meowtest` - push calibration ruler to phone\n"
+            "`/meowmessage <text> [duration]` - push custom message to phone\n"
+            "`/meowstatus` - current page and rotation state\n"
+            "`/meowdump` - write pages to disk for debugging\n"
+            "`/meowpurge` - delete all output files"
         )
-        advanced = (
-            "DM the bot to show a message on the phone screen for 5 minutes.\n"
-            "The priority user (PRIORITY_USER_ID) goes to page 12 and overrides everything.\n"
-            "All other DMs go to page 11 and override normal rotation.\n"
-            "Network issues override normal rotation and show page 7 (Status & Pings).\n"
-            "Page 10 (Discord) updates within 30s of any new server message."
-        )
-        embed = discord.Embed(title="Birch", color=discord.Color.blurple())
+        embed = discord.Embed(title="Meow", color=discord.Color.blurple())
         embed.add_field(name="Page Key", value=f"```\n{page_key}\n```", inline=False)
         embed.add_field(name="Commands", value=commands_public, inline=False)
         if is_owner:
             embed.add_field(name="Owner Commands", value=commands_owner, inline=False)
-        embed.add_field(name="Advanced Usage", value=advanced, inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    @tree.command(name="calicoabout", description="About the Calico system")
+    async def slash_calicoabout(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="Calico",
+            description=(
+                "Calico is a personal home lab system.\n"
+                "Birch watches and reports. Oak speaks and listens.\n"
+                "Meow is how they show up here - through Discord and a 2001 desk phone.\n"
+                "Old phone. New tricks."
+            ),
+            color=discord.Color.orange()
+        )
+        embed.set_footer(text="github.com/Calico-System/Meow")
         await interaction.response.send_message(embed=embed)
 
     async def cycle_status():
@@ -1238,18 +1243,18 @@ def start_discord_bot():
     def run_bot():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        # Reconnect loop — retries on any connection error with backoff
+        # Reconnect loop - retries on any connection error with backoff
         backoff = 5
         while True:
             try:
                 print("Discord bot: connecting...")
                 loop.run_until_complete(client.start(DISCORD_TOKEN))
             except Exception as e:
-                print(f"Discord bot disconnected: {e} — retrying in {backoff}s")
+                print(f"Discord bot disconnected: {e} - retrying in {backoff}s")
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 300)  # exponential backoff, cap at 5 min
             else:
-                # clean close — don't reconnect
+                # clean close - don't reconnect
                 print("Discord bot: clean shutdown")
                 break
 
@@ -1349,7 +1354,7 @@ def write_menus():
     print("Cached infoservices.xml (memory)")
 
     main_menu = f"""<CiscoIPPhoneMenu>
-  <Title>Birch Services</Title>
+  <Title>Meow Services</Title>
   <Prompt>Select an option</Prompt>
   <MenuItem>
     <n>Channel Directory</n>
@@ -1442,7 +1447,7 @@ def write_idle_cycle_immediate(page, hold_secs=None):
     base = f"http://{SERVER_IP}:{HTTP_PORT}"
     secs = hold_secs if hold_secs is not None else IDLE_CYCLE_SECONDS
     content = f"""<CiscoIPPhoneText Refresh="{secs}" URL="{base}/{page}">
-  <Title>Birch</Title>
+  <Title>Meow</Title>
   <Prompt>New message!</Prompt>
   <Text>Loading...</Text>
 </CiscoIPPhoneText>"""
@@ -1489,7 +1494,7 @@ def write_cycle_ring():
 
     if len(active_pages) == 1:
         content = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{active_pages[0]}">
-  <Title>Birch</Title>
+  <Title>Meow</Title>
   <Prompt>New message!</Prompt>
   <Text>Loading...</Text>
 </CiscoIPPhoneText>"""
@@ -1511,7 +1516,7 @@ def write_cycle_ring():
 
     entry = active_pages[random.randrange(len(active_pages))]
     content = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{entry}">
-  <Title>Birch</Title>
+  <Title>Meow</Title>
   <Prompt>Auto-cycling every {IDLE_CYCLE_SECONDS}s</Prompt>
   <Text>Loading...</Text>
 </CiscoIPPhoneText>"""
@@ -1620,7 +1625,7 @@ if __name__ == "__main__":
     # even if it polls before the first fetch cycle completes
     base = f"http://{SERVER_IP}:{HTTP_PORT}"
     PAGE_CACHE["idle.xml"] = f"""<CiscoIPPhoneText Refresh="10" URL="{base}/idle.xml">
-  <Title>Birch</Title>
+  <Title>Meow</Title>
   <Prompt>Starting up...</Prompt>
   <Text>Loading pages, please wait...</Text>
 </CiscoIPPhoneText>"""
@@ -1661,7 +1666,7 @@ if __name__ == "__main__":
         while True:
             time.sleep(60)
             if LAST_FETCH_TIME > 0 and time.time() - LAST_FETCH_TIME > 600:
-                print("WARNING: Watchdog triggered — fetch loop stalled, restarting fetch.")
+                print("WARNING: Watchdog triggered - fetch loop stalled, restarting fetch.")
                 try:
                     threading.Thread(target=fetch_all, daemon=True).start()
                 except Exception as e:

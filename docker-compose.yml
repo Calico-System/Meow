@@ -8,9 +8,9 @@ services:
     restart: unless-stopped
     volumes:
       # Firmware, dialplan, and SIP config files
-      - /mnt/pool/Apps/Birch/tftp:/data
+      - /mnt/pool/Apps/Calico/Meow/tftp:/data
 
-  # Birch — HTTP server, Discord bot, data fetcher
+  # Meow — HTTP server, Discord bot, data fetcher
   dashboard:
     image: python:3.12-alpine
     restart: unless-stopped
@@ -19,11 +19,11 @@ services:
       - 70:70
     volumes:
       # fetch.py lives in bot/
-      - /mnt/pool/Apps/Birch/bot:/app
+      - /mnt/pool/Apps/Calico/Meow/bot:/app
       # Static files (logo.bmp) and runtime output (speedtest cache)
-      - /mnt/pool/Apps/Birch/http:/output
+      - /mnt/pool/Apps/Calico/Meow/http:/output
     working_dir: /app
     command: python fetch.py
     env_file:
       # Copy .env.example to .env and fill in your values
-      - /mnt/pool/Apps/Birch/.env
+      - /mnt/pool/Apps/Calico/Meow/.env

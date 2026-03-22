@@ -1,8 +1,12 @@
-# Birch
+![Meow](readme-banner.png)
 
-A general-purpose Discord bot with a built-in Cisco 7940G IP phone dashboard. The phone's idle screen auto-cycles through live pages fetched from public APIs — weather, BBC news, exchange rates, National Grid carbon intensity, rocket launches, and more. A Discord bot lets you push messages directly to the phone screen and control everything remotely.
+# Meow
 
-Built and running on TrueNAS with Docker, but works on any Linux host with Docker Compose.
+A Discord bot and IP phone dashboard - part of [Calico](https://github.com/Calico-System), a personal home lab system.
+
+**Birch** watches the world and reports by text. **Oak** speaks through a 2001 Cisco 7940G desk phone that should probably be in a landfill by now. Together they make up Meow - running on TrueNAS with Docker.
+
+Old phone. New tricks.
 
 ---
 
@@ -10,18 +14,18 @@ Built and running on TrueNAS with Docker, but works on any Linux host with Docke
 
 | Page | Content |
 |------|---------|
-| 1 | Weather — current conditions, wind, UV, sunrise/sunset |
-| 2 | BBC News — top 3 headlines |
-| 3 | Economy — exchange rates, National Grid carbon intensity |
-| 4 | Space — next rocket launch |
-| 5 | History — random This Day in History event |
-| 6 | Fun — random cat fact + Magic 8 Ball |
-| 7 | Status & Pings — service health, ping latency |
-| 8 | Speedtest — last hourly speed result |
-| 9 | Servers — Minecraft player count + TrueNAS pool usage |
-| 10 | Discord — most recent messages per channel |
-| 11 | Latest DM — messages sent to the bot by anyone |
-| 12 | Priority DM — messages from the designated priority user |
+| 1 | Weather - current conditions, wind, UV, sunrise/sunset |
+| 2 | BBC News - top 3 headlines |
+| 3 | Economy - exchange rates, National Grid carbon intensity |
+| 4 | Space - next rocket launch |
+| 5 | History - random This Day in History event |
+| 6 | Fun - random cat fact + Magic 8 Ball |
+| 7 | Status & Pings - service health, ping latency |
+| 8 | Speedtest - last hourly speed result |
+| 9 | Servers - Minecraft player count + TrueNAS pool usage |
+| 10 | Discord - most recent messages per channel |
+| 11 | Latest DM - messages sent to the bot by anyone |
+| 12 | Priority DM - messages from designated priority users |
 
 DMs sent to the bot appear on the phone screen for 5 minutes and light the red MWI LED.
 
@@ -29,11 +33,11 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 
 ## Requirements
 
-- Cisco 7940G (tested on) or 7960G.
+- Cisco 7940G (tested) or 7960G
 - A [SIPcord](https://sipcord.net) account
 - Docker + Docker Compose on a machine accessible from the phone's LAN
 - A Discord bot token ([create one here](https://discord.com/developers))
-- The Cisco SIP firmware files for SIP firmware `P0S3-8-12-00` (not included — source these yourself)
+- The Cisco SIP firmware files for `P0S3-8-12-00` (not included - source these yourself)
 
 ---
 
@@ -42,8 +46,8 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOURUSERNAME/birch.git
-cd birch
+git clone https://github.com/Calico-System/Meow.git
+cd Meow
 ```
 
 ### 2. Configure environment
@@ -64,7 +68,7 @@ nano tftp/SIPDefault.cnf
 nano tftp/SIP001122334455.cnf
 ```
 
-Place firmware files (`.sb2`, `.bin`, `.sbn`, `.loads`) in the `tftp/` directory — these are not included in the repo.
+Place firmware files (`.sb2`, `.bin`, `.sbn`, `.loads`, `.tar`) in the `tftp/` directory - these are not included in the repo.
 
 ### 4. Start the containers
 
@@ -80,7 +84,7 @@ On the phone: **Settings → Network Configuration → TFTP Server** → enter y
 
 ## Customisation
 
-All options are set via `.env` — no need to edit the code. See `.env.example` for the full list with descriptions. Key options:
+All options are set via `.env` - no need to edit the code. See `.env.example` for the full list with descriptions.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -92,31 +96,44 @@ All options are set via `.env` — no need to edit the code. See `.env.example` 
 | `MINECRAFT_SERVER_NAME` | My Server | Server name shown on page 9 |
 | `NEWS_BASE_CURRENCY` | GBP | Base currency for exchange rates |
 | `PING_HOST_1_NAME/IP` | Google/8.8.8.8 | Up to 5 configurable ping targets |
+| `DUCKDNS_ADDRESS` | - | DuckDNS address for external ping on page 7 |
+| `PRIORITY_LABEL` | priority users | Label for priority users in bot messages |
 
 ---
 
-## Discord bot commands
+## Discord commands
 
+### Birch
 | Command | Who | Description |
 |---------|-----|-------------|
-| `/sipping` | Everyone | Live status — latency, rates, grid, Minecraft |
-| `/sippage <1-12>` | Everyone | Show a page as it appears on screen |
-| `/sippagefull <1-12>` | Everyone | Show a page untruncated |
-| `/sipabout` | Everyone | What Birch does |
-| `/siphelp` | Everyone | Full command list |
-| `/siprefresh` | Owner | Force regenerate all pages |
-| `/sipmessage <text>` | Owner | Push a custom message to the phone |
-| `/sipstatus` | Owner | Current page and rotation state |
-| `/siptest` | Owner | Push calibration ruler to screen |
-| `/sipdump` | Owner | Write pages to disk for debugging |
-| `/sippurge` | Owner | Delete all output files |
+| `/birchping` | Everyone | Live status - latency, rates, grid, Minecraft |
+| `/birchabout` | Everyone | Who Birch is |
+| `/birchhelp` | Everyone | Birch commands and DM usage |
+
+### Meow
+| Command | Who | Description |
+|---------|-----|-------------|
+| `/meowpage <1-12> [full]` | Everyone | Show a phone page |
+| `/meowall [full]` | Owner | Show all phone pages |
+| `/meowmessage <text> [duration]` | Owner | Push a custom message to the phone |
+| `/meowtest` | Owner | Push calibration ruler to phone |
+| `/meowstatus` | Owner | Current page and rotation state |
+| `/meowrefresh` | Owner | Force regenerate all pages |
+| `/meowdump` | Owner | Write pages to disk for debugging |
+| `/meowpurge` | Owner | Delete all output files |
+| `/meowhelp` | Everyone | Meow commands and page guide |
+
+### Calico
+| Command | Who | Description |
+|---------|-----|-------------|
+| `/calicoabout` | Everyone | About the Calico system |
 
 ---
 
 ## Repo structure
 
 ```
-birch/
+Meow/
 ├── bot/
 │   └── fetch.py                  # Main script
 ├── tftp/
@@ -126,8 +143,7 @@ birch/
 │   └── SIP_YOURMAC_.cnf.example
 ├── http/
 │   └── logo.bmp
-├── .env                          # Your secrets — never committed
-├── .env.example                  # Template
+├── .env.example
 ├── docker-compose.yml
 ├── .gitignore
 └── README.md
