@@ -555,7 +555,7 @@ def fetch_page6():
     if r:
         fact = phone_safe(r.json().get("fact", ""))
         fact_wrapped = wrap(fact, 32)
-        fact_short = "\n".join(fact_wrapped.split("\n")[:5])
+        fact_short = "\n".join(fact_wrapped.split("\n")[:4])
         cat_text = f"--- CAT FACT ---\n{fact_short}"
         cat_text_full = f"--- CAT FACT ---\n{wrap_full(fact)}"
         STATUS_CACHE["catfact"] = f"Cat fact: {fact_wrapped.split(chr(10))[0]}"[:128]
@@ -932,21 +932,25 @@ def start_discord_bot():
         """DM the owner and send a laughing response to the attacker."""
         # Warn the attacker
         try:
-            await user.send(
-                "\U0001f923 Nice try. That won\u2019t work here."
-            )
+            await user.send(embed=discord.Embed(
+                title="\U0001f923 Nice try.",
+                description="That won\u2019t work here.",
+                color=discord.Color.red()
+            ))
         except Exception:
             pass
         # Alert the owner
         for owner_id in OWNER_USER_IDS:
             try:
                 owner = await client.fetch_user(owner_id)
-                await owner.send(
-                    f"\u26a0\ufe0f **Injection attempt detected**\n"
-                    f"**Source:** {source}\n"
-                    f"**User:** {user.name} (ID: `{user.id}`)\n"
-                    f"**Content:** ```\n{content[:500]}\n```"
+                embed = discord.Embed(
+                    title="\u26a0\ufe0f Injection attempt detected",
+                    color=discord.Color.red()
                 )
+                embed.add_field(name="Source", value=source, inline=True)
+                embed.add_field(name="User", value=f"{user.name} (`{user.id}`)", inline=True)
+                embed.add_field(name="Content", value=f"```\n{content[:900]}\n```", inline=False)
+                await owner.send(embed=embed)
             except Exception:
                 pass
 
@@ -955,12 +959,14 @@ def start_discord_bot():
         for owner_id in OWNER_USER_IDS:
             try:
                 owner = await client.fetch_user(owner_id)
-                await owner.send(
-                    f"\u26a0\ufe0f **Injection attempt detected (server message)**\n"
-                    f"**Source:** {source}\n"
-                    f"**User:** {user_name} (ID: `{user_id}`)\n"
-                    f"**Content:** ```\n{content[:500]}\n```"
+                embed = discord.Embed(
+                    title="\u26a0\ufe0f Injection attempt detected (server message)",
+                    color=discord.Color.red()
                 )
+                embed.add_field(name="Source", value=source, inline=True)
+                embed.add_field(name="User", value=f"{user_name} (`{user_id}`)", inline=True)
+                embed.add_field(name="Content", value=f"```\n{content[:900]}\n```", inline=False)
+                await owner.send(embed=embed)
             except Exception:
                 pass
 
@@ -993,7 +999,7 @@ def start_discord_bot():
 
     def build_status_embed():
         latency = round(client.latency * 1000)
-        embed = discord.Embed(title="Meow", color=discord.Color.blurple())
+        embed = discord.Embed(title="Meow", color=discord.Color.from_rgb(253, 105, 0))
         embed.add_field(name="Latency", value=f"`{latency}ms`", inline=True)
         if "exchange" in STATUS_CACHE:
             embed.add_field(name="Rates", value=STATUS_CACHE["exchange"], inline=True)
@@ -1017,7 +1023,7 @@ def start_discord_bot():
     @tree.command(name="meowrefresh", description="Force regenerate all 12 phone pages immediately")
     async def slash_refresh(interaction: discord.Interaction):
         if not await owner_only(interaction): return
-        embed = discord.Embed(title="Refreshing all pages...", color=discord.Color.yellow())
+        embed = discord.Embed(title="Refreshing all pages...", color=discord.Color.from_rgb(253, 105, 0))
         await interaction.response.send_message(embed=embed)
         try:
             dm_funcs = []
@@ -1037,7 +1043,7 @@ def start_discord_bot():
     @tree.command(name="meowdump", description="Write all in-memory pages to disk for debugging (auto-deleted after 6 hours)")
     async def slash_dump(interaction: discord.Interaction):
         if not await owner_only(interaction): return
-        embed = discord.Embed(title="Dumping pages to disk...", color=discord.Color.yellow())
+        embed = discord.Embed(title="Dumping pages to disk...", color=discord.Color.from_rgb(253, 105, 0))
         await interaction.response.send_message(embed=embed)
         try:
             written = dump_to_disk()
@@ -1053,7 +1059,7 @@ def start_discord_bot():
     @tree.command(name="meowpurge", description="Delete all XML and JSON output files from disk")
     async def slash_purge(interaction: discord.Interaction):
         if not await owner_only(interaction): return
-        embed = discord.Embed(title="Purging output files...", color=discord.Color.yellow())
+        embed = discord.Embed(title="Purging output files...", color=discord.Color.from_rgb(253, 105, 0))
         await interaction.response.send_message(embed=embed)
         try:
             removed = []
@@ -1073,7 +1079,7 @@ def start_discord_bot():
     @tree.command(name="meowrestart", description="Restart the Meow container to apply updated code")
     async def slash_restart(interaction: discord.Interaction):
         if not await owner_only(interaction): return
-        embed = discord.Embed(title="Restarting...", description="Container will restart now. Back in a few seconds.", color=discord.Color.yellow())
+        embed = discord.Embed(title="Restarting...", description="Container will restart now. Back in a few seconds.", color=discord.Color.from_rgb(253, 105, 0))
         await interaction.response.send_message(embed=embed)
         await asyncio.sleep(1)
         os._exit(0)
@@ -1088,7 +1094,7 @@ def start_discord_bot():
                 "DM me and I'll put it on the screen. Voice messages coming soon.\n"
                 "Part of Calico."
             ),
-            color=discord.Color.blurple()
+            color=discord.Color.from_rgb(253, 105, 0)
         )
         embed.set_footer(text="github.com/Calico-System/Meow")
         await interaction.response.send_message(embed=embed)
@@ -1140,7 +1146,7 @@ def start_discord_bot():
             return
         title, text = result
         label = "full" if full else "screen"
-        colour = discord.Color.blurple() if full else discord.Color.dark_grey()
+        colour = discord.Color.from_rgb(253, 105, 0)
         embed = discord.Embed(title=f"{page}. {title} ({label})", description=f"```\n{text[:4000]}\n```", color=colour)
         await interaction.response.send_message(embed=embed)
 
@@ -1149,7 +1155,7 @@ def start_discord_bot():
     async def slash_all(interaction: discord.Interaction, full: bool = False):
         if not await owner_only(interaction): return
         label = "full" if full else "screen"
-        await interaction.response.send_message(embed=discord.Embed(title=f"Fetching all pages ({label})...", color=discord.Color.blurple()))
+        await interaction.response.send_message(embed=discord.Embed(title=f"Fetching all pages ({label})...", color=discord.Color.from_rgb(253, 105, 0)))
         for num in sorted(PAGE_MAP.keys()):
             if num in LOCKED_PAGES and interaction.user.id not in OWNER_USER_IDS:
                 continue
@@ -1157,7 +1163,7 @@ def start_discord_bot():
             if not result:
                 continue
             title, text = result
-            colour = discord.Color.blurple() if full else discord.Color.dark_grey()
+            colour = discord.Color.from_rgb(253, 105, 0)
             suffix = " (full)" if full else ""
             embed = discord.Embed(title=f"{num}. {title}{suffix}", description=f"```\n{text[:4000]}\n```", color=colour)
             await interaction.followup.send(embed=embed)
@@ -1182,7 +1188,7 @@ def start_discord_bot():
         await interaction.response.send_message(embed=discord.Embed(
             title="Calibration page pushed",
             description="Check the phone screen. Page auto-returns to idle after 5 minutes.",
-            color=discord.Color.yellow()
+            color=discord.Color.from_rgb(253, 105, 0)
         ))
 
     @tree.command(name="meowmessage", description="Push a custom message to the phone screen for a set duration")
@@ -1225,7 +1231,7 @@ def start_discord_bot():
             age = int((now - DM_RECEIVED_AT).total_seconds())
             dm_status = f"DM ({age}s ago)" if age < MWI_DM_DURATION else f"DM (expired, {age}s ago)"
 
-        embed = discord.Embed(title="Phone Status", color=discord.Color.blurple())
+        embed = discord.Embed(title="Phone Status", color=discord.Color.from_rgb(253, 105, 0))
         embed.add_field(name="Current page", value=f"`{current_page}`", inline=True)
         embed.add_field(name="Next page", value=f"`{next_page}` in {secs_until_next}s", inline=True)
         embed.add_field(name="Rotation", value=f"{len(active_pages)} pages active", inline=True)
@@ -1251,7 +1257,7 @@ def start_discord_bot():
             "Network issues force page 7 (Status & Pings).\n"
             "Page 10 (Discord) updates within 30s of any new server message."
         )
-        embed = discord.Embed(title="Birch", color=discord.Color.blurple())
+        embed = discord.Embed(title="Birch", color=discord.Color.from_rgb(253, 105, 0))
         embed.add_field(name="Commands", value=commands_public, inline=False)
         embed.add_field(name="DM Usage", value=advanced, inline=False)
         await interaction.response.send_message(embed=embed)
@@ -1278,7 +1284,7 @@ def start_discord_bot():
             "`/meowpurge` - delete all output files\n"
             "`/meowrestart` - restart the container to apply updated code"
         )
-        embed = discord.Embed(title="Meow", color=discord.Color.blurple())
+        embed = discord.Embed(title="Meow", color=discord.Color.from_rgb(253, 105, 0))
         embed.add_field(name="Page Key", value=f"```\n{page_key}\n```", inline=False)
         embed.add_field(name="Commands", value=commands_public, inline=False)
         if is_owner:
@@ -1295,7 +1301,7 @@ def start_discord_bot():
                 "Meow is how they show up here - through Discord and a 2001 desk phone.\n"
                 "Old phone. New tricks."
             ),
-            color=discord.Color.orange()
+            color=discord.Color.red()
         )
         embed.set_footer(text="github.com/Calico-System/Meow")
         await interaction.response.send_message(embed=embed)
@@ -1361,7 +1367,7 @@ def start_discord_bot():
                 await message.reply(embed=discord.Embed(
                     title="Slow down!",
                     description=f"You can send another message in {remaining}s.",
-                    color=discord.Color.orange()
+                    color=discord.Color.red()
                 ))
                 return
             DM_COOLDOWNS[message.author.id] = datetime.now()
