@@ -1,10 +1,12 @@
-![Meow](readme-banner.png)
+![Meow](.github/assets/readme-banner.png)
 
 # Meow
 
-A Discord bot and IP phone dashboard - part of [Calico](https://github.com/Calico-System), a personal home lab system.
+A Discord bot and provisioned IP phone dashboard.
 
-**Birch** watches the world and reports by text. **Oak** speaks through a 2001 Cisco 7940G desk phone that should probably be in a landfill by now. Together they make up Meow - running on TrueNAS with Docker.
+**Birch** and **Oak** make themselves known across the Calico system. Here, Birch works through a Discord bot and Oak through a 2001 Cisco 7940G desk phone that should probably be in a landfill by now. Runs on TrueNAS with Docker.
+
+Part of [Calico](https://github.com/Calico-System), though not all of it is custom built like this.
 
 Old phone. New tricks.
 
@@ -143,6 +145,11 @@ Meow/
 │   └── SIP_YOURMAC_.cnf.example
 ├── http/
 │   └── logo.bmp
+├── .github/
+│   └── assets/
+│       ├── meowlogo.png
+│       ├── readme-banner.png
+│       └── social-preview.png
 ├── .env.example
 ├── docker-compose.yml
 ├── .gitignore
