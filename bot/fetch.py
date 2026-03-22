@@ -85,6 +85,7 @@ MWI_ENABLED = os.environ.get("MWI_ENABLED", "true").lower() == "true"
 MWI_DM_DURATION = int(os.environ.get("MWI_DM_DURATION", "300"))
 DM_COOLDOWN_SECONDS = int(os.environ.get("DM_COOLDOWN_SECONDS", "60"))
 PHONE_SIP_EXTENSION = os.environ.get("PHONE_SIP_EXTENSION", "1001")
+DUCKDNS_ADDRESS = os.environ.get("DUCKDNS_ADDRESS", "")
 MINECRAFT_SERVER_NAME = os.environ.get("MINECRAFT_SERVER_NAME", "Minecraft")
 NEWS_BASE_CURRENCY = os.environ.get("NEWS_BASE_CURRENCY", "GBP")
 
@@ -98,6 +99,16 @@ for _i in range(1, 6):
         PING_HOSTS[_name] = _ip
 if not PING_HOSTS:
     PING_HOSTS = {"Google": "8.8.8.8"}
+if DUCKDNS_ADDRESS and "External" not in PING_HOSTS:
+    PING_HOSTS["External"] = DUCKDNS_ADDRESS
+
+# Directory entries - configure up to 10 via DIRECTORY_ENTRY_1_NAME / DIRECTORY_ENTRY_1_NUMBER etc.
+DIRECTORY_ENTRIES = []
+for _i in range(1, 11):
+    _name   = os.environ.get(f"DIRECTORY_ENTRY_{_i}_NAME", "")
+    _number = os.environ.get(f"DIRECTORY_ENTRY_{_i}_NUMBER", "")
+    if _name and _number:
+        DIRECTORY_ENTRIES.append((_name, _number))
 
 # ═══════════════════════════════════════════════════════
 # HELPERS
@@ -590,8 +601,8 @@ def fetch_page7():
             f"Discord: {discord_svc_status} ({discord_latency})",
         ]
 
-        page7_lines = status_lines + ping_lines[:-1]
-        page7_full_lines = status_lines + [""] + ping_lines[:-1]
+        page7_lines = status_lines + ping_lines[:4]  # phone shows 7 lines: 3 status + 4 pings
+        page7_full_lines = status_lines + [""] + ping_lines
         write_xml("page7.xml", "Status & Pings", "\n".join(page7_lines))
         write_xml("page7_full.xml", "Status & Pings", "\n".join(page7_full_lines))
 
@@ -602,6 +613,8 @@ def fetch_page7():
         print(f"ERROR: fetch_page7 crashed: {e}")
         write_xml("page7.xml", "Status & Pings", f"--- STATUS ---\nError fetching data:\n{str(e)[:60]}")
         write_xml("page7_full.xml", "Status & Pings", f"--- STATUS ---\nError fetching data:\n{str(e)[:60]}")
+        write_xml("page8.xml", "Speedtest", "--- SPEEDTEST ---\nUnavailable")
+        write_xml("page8_full.xml", "Speedtest", "--- SPEEDTEST ---\nUnavailable")
 
     finally:
         NETWORK_ISSUE = _network
@@ -782,7 +795,7 @@ def fetch_page10():
     for t in threads:
         t.join(timeout=10)
 
-    channel_data = [r for r in results if r is not None]
+    channel_data = [ch for ch in results if ch is not None]
 
     if not channel_data:
         write_xml("page10.xml", "Discord", "No recent messages found")
@@ -860,6 +873,8 @@ def start_discord_bot():
             str(LONGITUDE): "#.####",
             LOCATION_NAME: "######",
         }
+        if DUCKDNS_ADDRESS:
+            redactions[DUCKDNS_ADDRESS] = "####.duckdns.org"
         for ip in PING_HOSTS.values():
             redactions[ip] = "##.##.##.##"
         for val, rep in redactions.items():
@@ -933,8 +948,9 @@ def start_discord_bot():
         try:
             removed = []
             for fname in os.listdir(OUTPUT_DIR):
-                if fname.endswith(".xml") or fname.endswith(".json"):
-                    os.remove(os.path.join(OUTPUT_DIR, fname))
+                fpath = os.path.join(OUTPUT_DIR, fname)
+                if fname.endswith(".xml") or (fname.endswith(".json") and fname != os.path.basename(SPEEDTEST_CACHE)):
+                    os.remove(fpath)
                     removed.append(fname)
             if removed:
                 embed = discord.Embed(title=f"Removed {len(removed)} files", description="\n".join(removed), color=discord.Color.green())
@@ -943,6 +959,14 @@ def start_discord_bot():
             await interaction.followup.send(embed=embed)
         except Exception as e:
             await interaction.followup.send(embed=discord.Embed(title="Error", description=str(e), color=discord.Color.red()))
+
+    @tree.command(name="meowrestart", description="Restart the Meow container to apply updated code")
+    async def slash_restart(interaction: discord.Interaction):
+        if not await owner_only(interaction): return
+        embed = discord.Embed(title="Restarting...", description="Container will restart now. Back in a few seconds.", color=discord.Color.yellow())
+        await interaction.response.send_message(embed=embed)
+        await asyncio.sleep(1)
+        os._exit(0)
 
     @tree.command(name="birchabout", description="Who Birch is")
     async def slash_birchabout(interaction: discord.Interaction):
@@ -984,7 +1008,7 @@ def start_discord_bot():
         if filename not in PAGE_CACHE:
             filename = auto_filename if full else full_filename
         if filename not in PAGE_CACHE:
-            return fallback_title, "Page not yet generated. Try /siprefresh"
+            return fallback_title, "Page not yet generated. Try /meowrefresh"
         try:
             root = ET.fromstring(PAGE_CACHE[filename])
             title = root.findtext("Title") or fallback_title
@@ -1082,10 +1106,10 @@ def start_discord_bot():
         dm_status = "None"
         if DM_MESSAGE_PRIORITY:
             age = int((now - DM_MESSAGE_PRIORITY["time"]).total_seconds())
-            dm_status = f"VIP DM ({age}s ago)" if age < 300 else f"VIP DM (expired, {age}s ago)"
+            dm_status = f"VIP DM ({age}s ago)" if age < MWI_DM_DURATION else f"VIP DM (expired, {age}s ago)"
         elif DM_MESSAGE:
             age = int((now - DM_RECEIVED_AT).total_seconds())
-            dm_status = f"DM ({age}s ago)" if age < 300 else f"DM (expired, {age}s ago)"
+            dm_status = f"DM ({age}s ago)" if age < MWI_DM_DURATION else f"DM (expired, {age}s ago)"
 
         embed = discord.Embed(title="Phone Status", color=discord.Color.blurple())
         embed.add_field(name="Current page", value=f"`{current_page}`", inline=True)
@@ -1100,7 +1124,6 @@ def start_discord_bot():
 
     @tree.command(name="birchhelp", description="Birch commands and DM usage")
     async def slash_birchhelp(interaction: discord.Interaction):
-        is_owner = interaction.user.id in OWNER_USER_IDS
         commands_public = (
             "`/birchping` - live status and latency\n"
             "`/birchabout` - who Birch is\n"
@@ -1138,7 +1161,8 @@ def start_discord_bot():
             "`/meowmessage <text> [duration]` - push custom message to phone\n"
             "`/meowstatus` - current page and rotation state\n"
             "`/meowdump` - write pages to disk for debugging\n"
-            "`/meowpurge` - delete all output files"
+            "`/meowpurge` - delete all output files\n"
+            "`/meowrestart` - restart the container to apply updated code"
         )
         embed = discord.Embed(title="Meow", color=discord.Color.blurple())
         embed.add_field(name="Page Key", value=f"```\n{page_key}\n```", inline=False)
@@ -1221,12 +1245,12 @@ def start_discord_bot():
         if message.author.id in PRIORITY_USER_IDS:
             DM_MESSAGE_PRIORITY = dm_entry
             fetch_page12()
-            write_idle_cycle_immediate("page12.xml", hold_secs=300)
+            write_idle_cycle_immediate("page12.xml", hold_secs=MWI_DM_DURATION)
         else:
             DM_MESSAGE = dm_entry
             DM_RECEIVED_AT = datetime.now()
             fetch_page11()
-            write_idle_cycle_immediate("page11.xml", hold_secs=300)
+            write_idle_cycle_immediate("page11.xml", hold_secs=MWI_DM_DURATION)
         threading.Thread(target=update_mwi, daemon=True).start()
         print(f"DM from {message.author.name}: {message.content[:50]}")
         received = dm_entry["time"].strftime("%H:%M %d/%m")
@@ -1243,18 +1267,18 @@ def start_discord_bot():
     def run_bot():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        # Reconnect loop - retries on any connection error with backoff
+        # discord.py's reconnect=True handles transient disconnects automatically inside client.start()
+        # For fatal errors (bad token, etc.) we retry with backoff
         backoff = 5
         while True:
             try:
                 print("Discord bot: connecting...")
-                loop.run_until_complete(client.start(DISCORD_TOKEN))
+                loop.run_until_complete(client.start(DISCORD_TOKEN, reconnect=True))
             except Exception as e:
-                print(f"Discord bot disconnected: {e} - retrying in {backoff}s")
+                print(f"Discord bot fatal error: {e} - retrying in {backoff}s")
                 time.sleep(backoff)
-                backoff = min(backoff * 2, 300)  # exponential backoff, cap at 5 min
+                backoff = min(backoff * 2, 300)
             else:
-                # clean close - don't reconnect
                 print("Discord bot: clean shutdown")
                 break
 
@@ -1275,11 +1299,10 @@ def fetch_page11():
     else:
         body = "--- DM ---\nNo messages yet"
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
-    write_xml_refresh("page11.xml", "DM", body, 300, idle_url)
-    write_xml_refresh("page11_full.xml", "DM", body, 300, idle_url)
+    write_xml_refresh("page11.xml", "DM", body, MWI_DM_DURATION, idle_url)
+    write_xml_refresh("page11_full.xml", "DM", body, MWI_DM_DURATION, idle_url)
 
 def fetch_page12():
-    global DM_MESSAGE_PRIORITY
     if DM_MESSAGE_PRIORITY:
         author = DM_MESSAGE_PRIORITY["author"]
         text = DM_MESSAGE_PRIORITY["text"]
@@ -1288,8 +1311,8 @@ def fetch_page12():
     else:
         body = "--- VIP DM ---\nNo messages yet"
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
-    write_xml_refresh("page12.xml", "VIP DM", body, 300, idle_url)
-    write_xml_refresh("page12_full.xml", "VIP DM", body, 300, idle_url)
+    write_xml_refresh("page12.xml", "VIP DM", body, MWI_DM_DURATION, idle_url)
+    write_xml_refresh("page12_full.xml", "VIP DM", body, MWI_DM_DURATION, idle_url)
 
 # ═══════════════════════════════════════════════════════
 # MENUS
@@ -1357,20 +1380,26 @@ def write_menus():
   <Title>Meow Services</Title>
   <Prompt>Select an option</Prompt>
   <MenuItem>
-    <n>Channel Directory</n>
-    <URL>{base}/channels.xml</URL>
-  </MenuItem>
-  <MenuItem>
-    <n>Extension Cheat Sheet</n>
-    <URL>{base}/cheatsheet.xml</URL>
-  </MenuItem>
-  <MenuItem>
     <n>Info Services</n>
     <URL>{base}/infoservices.xml</URL>
   </MenuItem>
 </CiscoIPPhoneMenu>"""
     PAGE_CACHE["services.xml"] = main_menu
     print("Cached services.xml (memory)")
+
+    entries_xml = ""
+    for name, number in DIRECTORY_ENTRIES:
+        safe_name   = name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        safe_number = number.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        entries_xml += f"  <DirectoryEntry>\n    <Name>{safe_name}</Name>\n    <Telephone>{safe_number}</Telephone>\n  </DirectoryEntry>\n"
+    if not entries_xml:
+        entries_xml = "  <DirectoryEntry>\n    <Name>No entries configured</Name>\n    <Telephone>0</Telephone>\n  </DirectoryEntry>\n"
+    directory = f"""<CiscoIPPhoneDirectory>
+  <Title>Directory</Title>
+  <Prompt>Select to dial</Prompt>
+{entries_xml}</CiscoIPPhoneDirectory>"""
+    PAGE_CACHE["directory.xml"] = directory
+    print("Cached directory.xml (memory)")
 
 # ═══════════════════════════════════════════════════════
 # GLOBAL FLAGS
@@ -1382,10 +1411,10 @@ PING_ISSUE = False
 SERVICE_ISSUE = False
 MWI_STATE = False
 LAST_FETCH_TIME = 0
+LAST_PAGE7_UPDATE = 0
 DM_MESSAGE = None
 DM_RECEIVED_AT = None
 DM_MESSAGE_PRIORITY = None
-LAST_PAGE7_UPDATE = 0
 DM_COOLDOWNS = {}
 
 # ═══════════════════════════════════════════════════════
@@ -1460,13 +1489,13 @@ def _get_active_pages():
         dm_time = DM_MESSAGE_PRIORITY["time"]
         if hasattr(dm_time, 'tzinfo') and dm_time.tzinfo is not None:
             dm_time = dm_time.replace(tzinfo=None)
-        if (now - dm_time).total_seconds() < 300:
+        if (now - dm_time).total_seconds() < MWI_DM_DURATION:
             return ["page12.xml"]
     if DM_RECEIVED_AT:
         received_at = DM_RECEIVED_AT
         if hasattr(received_at, 'tzinfo') and received_at.tzinfo is not None:
             received_at = received_at.replace(tzinfo=None)
-        if (now - received_at).total_seconds() < 300:
+        if (now - received_at).total_seconds() < MWI_DM_DURATION:
             return ["page11.xml"]
     if NETWORK_ISSUE:
         return ["page7.xml"]
@@ -1478,13 +1507,13 @@ def _get_active_pages():
         dm_time = DM_MESSAGE_PRIORITY["time"]
         if hasattr(dm_time, 'tzinfo') and dm_time.tzinfo is not None:
             dm_time = dm_time.replace(tzinfo=None)
-        if (now - dm_time).total_seconds() >= 300:
+        if (now - dm_time).total_seconds() >= MWI_DM_DURATION:
             pages.append("page12.xml")
     if DM_RECEIVED_AT:
         received_at = DM_RECEIVED_AT
         if hasattr(received_at, 'tzinfo') and received_at.tzinfo is not None:
             received_at = received_at.replace(tzinfo=None)
-        if (now - received_at).total_seconds() >= 300:
+        if (now - received_at).total_seconds() >= MWI_DM_DURATION:
             pages.append("page11.xml")
     return pages
 
@@ -1503,18 +1532,21 @@ def write_cycle_ring():
         threading.Thread(target=update_mwi, daemon=True).start()
         return
 
-    for i, filename in enumerate(active_pages):
-        next_filename = active_pages[(i + 1) % len(active_pages)]
+    # Only patch pages that are actually in cache to avoid broken ring links
+    available_pages = [p for p in active_pages if p in PAGE_CACHE]
+    if not available_pages:
+        print("WARNING: write_cycle_ring - no pages in cache, skipping ring patch")
+        return
+
+    for i, filename in enumerate(available_pages):
+        next_filename = available_pages[(i + 1) % len(available_pages)]
         next_url = f"{base}/{next_filename}"
-        if filename not in PAGE_CACHE:
-            print(f"WARNING: {filename} not in PAGE_CACHE, skipping ring patch")
-            continue
         xml = PAGE_CACHE[filename]
         xml = re.sub(r'(<CiscoIPPhoneText[^>]*Refresh="[^"]*"\s+URL=")[^"]*(")',
                      rf'\g<1>{next_url}\g<2>', xml)
         PAGE_CACHE[filename] = xml
 
-    entry = active_pages[random.randrange(len(active_pages))]
+    entry = available_pages[random.randrange(len(available_pages))]
     content = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{entry}">
   <Title>Meow</Title>
   <Prompt>Auto-cycling every {IDLE_CYCLE_SECONDS}s</Prompt>
