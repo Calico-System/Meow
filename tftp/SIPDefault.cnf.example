@@ -1,0 +1,59 @@
+; =====================
+; Firmware
+; =====================
+image_version: P0S3-8-12-00
+
+; =====================
+; SIP / Proxy
+; =====================
+proxy1_address: bridge-eu1.sipcord.net
+proxy_register: 1
+nat_enable: 1
+nat_address: your-duckdns-address.duckdns.org
+register_expires: 120
+
+; =====================
+; Time & Clock (UK)
+; =====================
+sntp_server: pool.ntp.org
+sntp_mode: unicast
+time_zone: GMT
+time_format_24hr: 1
+date_format: D/M/Y
+dst_offset: 1
+dst_start_month: March
+dst_start_day_of_week: Sun
+dst_start_week_of_month: 8
+dst_start_time: 01
+dst_stop_month: Oct
+dst_stop_day_of_week: Sun
+dst_stop_week_of_month: 8
+dst_stop_time: 02
+dst_auto_adjust: 1
+
+; =====================
+; Directory & Logo
+; =====================
+services_url: http://YOUR_SERVER_IP:70/services.xml
+directory_url: http://YOUR_SERVER_IP:70/directory.xml
+logo_url: http://YOUR_SERVER_IP:70/logo.bmp
+
+; =====================
+; Dialplan
+; =====================
+dial_template: dialplan
+
+; =====================
+; Call Features
+; =====================
+call_waiting: 1
+call_hold_ringback: 1
+dnd_control: 1
+transfer_on_hangup: 0
+
+; =====================
+; Audio
+; =====================
+preferred_codec: g711ulaw
+dtmf_inband: 1
+dtmf_outofband: avt

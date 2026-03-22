@@ -1,0 +1,29 @@
+services:
+
+  # TFTP server — serves firmware and config files to the phone on boot
+  tftp:
+    image: palw3ey/ye3tftp
+    ports:
+      - 69:69/udp
+    restart: unless-stopped
+    volumes:
+      # Firmware, dialplan, and SIP config files
+      - /mnt/pool/Apps/Birch/tftp:/data
+
+  # Birch — HTTP server, Discord bot, data fetcher
+  dashboard:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    ports:
+      # HTTP port served to the phone for XML pages
+      - 70:70
+    volumes:
+      # fetch.py lives in bot/
+      - /mnt/pool/Apps/Birch/bot:/app
+      # Static files (logo.bmp) and runtime output (speedtest cache)
+      - /mnt/pool/Apps/Birch/http:/output
+    working_dir: /app
+    command: python fetch.py
+    env_file:
+      # Copy .env.example to .env and fill in your values
+      - /mnt/pool/Apps/Birch/.env
