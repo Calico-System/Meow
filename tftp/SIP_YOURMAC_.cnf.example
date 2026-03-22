@@ -1,6 +1,10 @@
 ; Rename this file to SIP + your phone's MAC address + .cnf
 ; Example: SIP001D45ABCDEF.cnf
 ; MAC address is printed on the label on the underside of the phone.
+;
+; Settings in this file override SIPDefault.cnf.
+; You only need to include settings that differ per phone.
+; The shared settings below are included for reference.
 
 ; =====================
 ; Firmware
