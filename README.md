@@ -21,8 +21,8 @@ Old phone. New tricks.
 | 3 | Economy - exchange rates, National Grid carbon intensity |
 | 4 | Space - next rocket launch |
 | 5 | History - random This Day in History event |
-| 6 | Fun - random cat fact + Magic 8 Ball |
-| 7 | Status & Pings - service health, ping latency |
+| 6 | Fun - random cat fact (up to 4 lines) + Magic 8 Ball |
+| 7 | Status & Pings - all services and ping latency on one screen |
 | 8 | Speedtest - last hourly speed result |
 | 9 | Servers - Minecraft player count + TrueNAS pool usage |
 | 10 | Discord - most recent messages per channel |
@@ -160,6 +160,14 @@ Meow/
 ├── .gitignore
 └── README.md
 ```
+
+---
+
+## Security
+
+Meow includes injection detection across all user input surfaces — DMs, server messages piped to the phone, and `/meowmessage`. It checks for XML injection, Cisco XML element injection, path traversal, and SQL injection patterns.
+
+If an attempt is detected the owner receives a DM alert with the user's name, ID, source, and content. For DMs the attacker also receives a response letting them know it won't work. Server message attempts are silently filtered and flagged to the owner only.
 
 ---
 
