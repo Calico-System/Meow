@@ -36,6 +36,7 @@ import time
 import uuid
 import zoneinfo
 import xml.etree.ElementTree as ET
+import asyncio
 from collections import deque
 from datetime import datetime, timezone
 
@@ -110,6 +111,14 @@ for _i in range(1, 11):
     _number = os.environ.get(f"DIRECTORY_ENTRY_{_i}_NUMBER", "")
     if _name and _number:
         DIRECTORY_ENTRIES.append((_name, _number))
+
+# Asterisk AMI
+ASTERISK_AMI_HOST     = os.environ.get("ASTERISK_AMI_HOST", "127.0.0.1")
+ASTERISK_AMI_PORT     = int(os.environ.get("ASTERISK_AMI_PORT", "5038"))
+ASTERISK_AMI_USER     = os.environ.get("ASTERISK_AMI_USER", "")
+ASTERISK_AMI_SECRET   = os.environ.get("ASTERISK_AMI_SECRET", "")
+ASTERISK_AMI_CHANNEL  = os.environ.get("ASTERISK_AMI_CALL_CHANNEL_ID", "")
+ASTERISK_LINE1_NUMBER = os.environ.get("ASTERISK_LINE1_NUMBER", "2001")
 
 # ═══════════════════════════════════════════════════════
 # HELPERS
@@ -917,6 +926,143 @@ STATUS_KEYS = ["exchange", "grid", "history", "catfact", "8ball", "minecraft", "
 
 discord_bot = None
 
+# ═══════════════════════════════════════════════════════
+# ASTERISK AMI
+# ═══════════════════════════════════════════════════════
+
+ACTIVE_CALLS = {}        # channel -> {extension, start_time, callerid}
+AMI_CONNECTED = False
+_ami_socket = None
+_ami_lock = threading.Lock()
+_ami_event_callbacks = []  # list of async coroutines to call on events
+
+def ami_connect():
+    """Connect to Asterisk AMI and log in. Returns socket or None."""
+    global _ami_socket, AMI_CONNECTED
+    if not ASTERISK_AMI_USER or not ASTERISK_AMI_SECRET:
+        return None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((ASTERISK_AMI_HOST, ASTERISK_AMI_PORT))
+        sock.settimeout(None)
+        sock.recv(1024)  # banner
+        login = (
+            f"Action: Login\r\n"
+            f"Username: {ASTERISK_AMI_USER}\r\n"
+            f"Secret: {ASTERISK_AMI_SECRET}\r\n"
+            f"\r\n"
+        )
+        sock.sendall(login.encode())
+        resp = sock.recv(1024).decode(errors="ignore")
+        if "Success" not in resp:
+            print(f"AMI login failed: {resp.strip()}")
+            sock.close()
+            return None
+        _ami_socket = sock
+        AMI_CONNECTED = True
+        print("AMI connected to Asterisk")
+        return sock
+    except Exception as e:
+        print(f"AMI connect error: {e}")
+        AMI_CONNECTED = False
+        return None
+
+def ami_send(action: str):
+    """Send a raw AMI action string."""
+    with _ami_lock:
+        if _ami_socket:
+            try:
+                _ami_socket.sendall(action.encode())
+                return True
+            except Exception as e:
+                print(f"AMI send error: {e}")
+    return False
+
+def ami_originate(extension: str, callerid: str = "Calico <2001>") -> bool:
+    """Originate a call from the phone's line 1 to an extension."""
+    action = (
+        f"Action: Originate\r\n"
+        f"Channel: SIP/oak-line1\r\n"
+        f"Exten: {extension}\r\n"
+        f"Context: calico\r\n"
+        f"Priority: 1\r\n"
+        f"CallerID: {callerid}\r\n"
+        f"Timeout: 30000\r\n"
+        f"Async: yes\r\n"
+        f"\r\n"
+    )
+    return ami_send(action)
+
+def _parse_ami_event(raw: str) -> dict:
+    """Parse a single AMI event block into a dict."""
+    event = {}
+    for line in raw.strip().splitlines():
+        if ":" in line:
+            key, _, val = line.partition(":")
+            event[key.strip()] = val.strip()
+    return event
+
+def ami_event_loop(loop):
+    """Background thread: reads AMI events and fires callbacks."""
+    global AMI_CONNECTED
+    backoff = 5
+    while True:
+        sock = ami_connect()
+        if not sock:
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 60)
+            continue
+        backoff = 5
+        buf = ""
+        try:
+            while True:
+                data = sock.recv(4096).decode(errors="ignore")
+                if not data:
+                    break
+                buf += data
+                while "\r\n\r\n" in buf:
+                    block, buf = buf.split("\r\n\r\n", 1)
+                    event = _parse_ami_event(block)
+                    if not event.get("Event"):
+                        continue
+                    ev = event["Event"]
+
+                    # Track active calls
+                    channel = event.get("Channel", "")
+                    if ev == "Dial" and event.get("SubEvent") == "Begin":
+                        ACTIVE_CALLS[channel] = {
+                            "extension": event.get("Dialstring", "?"),
+                            "callerid": event.get("CallerIDNum", "?"),
+                            "start": datetime.now(),
+                        }
+                    elif ev in ("Hangup", "HangupRequest") and channel in ACTIVE_CALLS:
+                        ACTIVE_CALLS.pop(channel, None)
+
+                    # Fire async callbacks (call events to Discord)
+                    if ev in ("Dial", "Hangup", "Bridge"):
+                        for cb in _ami_event_callbacks:
+                            asyncio.run_coroutine_threadsafe(cb(event), loop)
+        except Exception as e:
+            print(f"AMI event loop error: {e}")
+        finally:
+            AMI_CONNECTED = False
+            try:
+                sock.close()
+            except Exception:
+                pass
+        print("AMI disconnected - reconnecting...")
+        time.sleep(backoff)
+
+def start_ami(loop):
+    """Start the AMI event loop in a background thread."""
+    if not ASTERISK_AMI_USER or not ASTERISK_AMI_SECRET:
+        print("AMI: ASTERISK_AMI_USER/SECRET not set - skipping")
+        return
+    t = threading.Thread(target=ami_event_loop, args=(loop,), daemon=True, name="ami_event_loop")
+    t.start()
+    print("AMI event loop thread started")
+
 def start_discord_bot():
     import discord
     from discord import app_commands
@@ -1282,7 +1428,9 @@ def start_discord_bot():
             "`/meowstatus` - current page and rotation state\n"
             "`/meowdump` - write pages to disk for debugging\n"
             "`/meowpurge` - delete all output files\n"
-            "`/meowrestart` - restart the container to apply updated code"
+            "`/meowrestart` - restart the container to apply updated code\n"
+            "`/meowcall <extension>` - originate a call from Oak to an extension\n"
+            "`/meowcalls` - show active calls on the Calico PBX"
         )
         embed = discord.Embed(title="Meow", color=discord.Color.from_rgb(253, 105, 0))
         embed.add_field(name="Page Key", value=f"```\n{page_key}\n```", inline=False)
@@ -1290,6 +1438,96 @@ def start_discord_bot():
         if is_owner:
             embed.add_field(name="Owner Commands", value=commands_owner, inline=False)
         await interaction.response.send_message(embed=embed)
+
+    @tree.command(name="meowcall", description="Originate a call from Oak to an extension")
+    @app_commands.describe(extension="Extension number to dial")
+    async def slash_call(interaction: discord.Interaction, extension: str):
+        if not await owner_only(interaction): return
+        if not AMI_CONNECTED:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="Asterisk not connected",
+                description="AMI is unavailable — check the Asterisk container.",
+                color=discord.Color.red()
+            ), ephemeral=True)
+            return
+        success = ami_originate(extension)
+        if success:
+            await interaction.response.send_message(embed=discord.Embed(
+                title=f"Calling {extension}",
+                description="Oak's phone should ring shortly.",
+                color=discord.Color.from_rgb(253, 105, 0)
+            ))
+        else:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="Call failed",
+                description="AMI originate command failed.",
+                color=discord.Color.red()
+            ), ephemeral=True)
+
+    @tree.command(name="meowcalls", description="Show active calls on the Calico PBX")
+    async def slash_calls(interaction: discord.Interaction):
+        if not await owner_only(interaction): return
+        if not ACTIVE_CALLS:
+            await interaction.response.send_message(embed=discord.Embed(
+                title="No active calls",
+                color=discord.Color.from_rgb(253, 105, 0)
+            ))
+            return
+        embed = discord.Embed(title="Active calls", color=discord.Color.from_rgb(253, 105, 0))
+        for channel, info in ACTIVE_CALLS.items():
+            duration = int((datetime.now() - info["start"]).total_seconds())
+            mins, secs = divmod(duration, 60)
+            embed.add_field(
+                name=f"{info['callerid']} → {info['extension']}",
+                value=f"`{mins:02d}:{secs:02d}` | `{channel}`",
+                inline=False
+            )
+        await interaction.response.send_message(embed=embed)
+
+    async def on_ami_event(event: dict):
+        """Post call events to the designated Discord channel."""
+        if not ASTERISK_AMI_CHANNEL:
+            return
+        try:
+            ch = await client.fetch_channel(int(ASTERISK_AMI_CHANNEL))
+        except Exception:
+            return
+        ev = event.get("Event", "")
+        channel = event.get("Channel", "")
+        callerid = event.get("CallerIDNum", "?")
+        exten = event.get("Dialstring") or event.get("Exten", "?")
+
+        if ev == "Dial" and event.get("SubEvent") == "Begin":
+            embed = discord.Embed(
+                title="\U0001f4de Call started",
+                description=f"`{callerid}` → `{exten}`",
+                color=discord.Color.from_rgb(253, 105, 0)
+            )
+        elif ev == "Hangup" and channel:
+            cause = event.get("Cause-txt", "Normal")
+            duration = ""
+            if channel in ACTIVE_CALLS:
+                secs = int((datetime.now() - ACTIVE_CALLS[channel]["start"]).total_seconds())
+                mins, s = divmod(secs, 60)
+                duration = f" ({mins:02d}:{s:02d})"
+            embed = discord.Embed(
+                title="\U0001f4f4 Call ended",
+                description=f"`{channel}`{duration} — {cause}",
+                color=discord.Color.from_rgb(253, 105, 0)
+            )
+        elif ev == "Bridge":
+            embed = discord.Embed(
+                title="\U0001f501 Call bridged",
+                description=f"`{event.get('Channel1', '?')}` ↔ `{event.get('Channel2', '?')}`",
+                color=discord.Color.from_rgb(253, 105, 0)
+            )
+        else:
+            return
+
+        try:
+            await ch.send(embed=embed)
+        except Exception as e:
+            print(f"AMI Discord post error: {e}")
 
     @tree.command(name="calicoabout", description="About the Calico system")
     async def slash_calicoabout(interaction: discord.Interaction):
@@ -1342,6 +1580,8 @@ def start_discord_bot():
         print("Slash commands synced")
         asyncio.ensure_future(cycle_status())
         asyncio.ensure_future(drain_injection_queue())
+        _ami_event_callbacks.append(on_ami_event)
+        start_ami(asyncio.get_event_loop())
         threading.Thread(target=fetch_page10, daemon=True).start()
 
     @client.event
@@ -1386,6 +1626,8 @@ def start_discord_bot():
             DM_MESSAGE_PRIORITY = dm_entry
             fetch_page12()
             write_idle_cycle_immediate("page12.xml", hold_secs=MWI_DM_DURATION)
+            if AMI_CONNECTED:
+                ami_originate(ASTERISK_LINE1_NUMBER, f"Priority DM <{ASTERISK_LINE1_NUMBER}>")
         else:
             DM_MESSAGE = dm_entry
             DM_RECEIVED_AT = datetime.now()

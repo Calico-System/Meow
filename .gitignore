@@ -24,6 +24,7 @@ asterisk/sip.conf
 asterisk/extensions.conf
 asterisk/rtp.conf
 asterisk/modules.conf
+asterisk/manager.conf
 
 # Python
 __pycache__/
