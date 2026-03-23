@@ -18,10 +18,32 @@ def bootstrap():
     result = subprocess.run(["which", "speedtest"], capture_output=True)
     if result.returncode != 0:
         print("Bootstrap: installing Ookla speedtest CLI...")
-        subprocess.run(
-            "curl -s https://install.speedtest.net/app/cli/install.sh | sh",
-            shell=True, check=False
-        )
+        # Download to a temp file first so we can sanity-check the content
+        # before executing — avoids blindly piping an untrusted URL to sh.
+        import tempfile
+        try:
+            dl = subprocess.run(
+                ["curl", "-fsSL", "--max-filesize", "524288",
+                 "https://install.speedtest.net/app/cli/install.sh"],
+                capture_output=True, timeout=30
+            )
+            if dl.returncode != 0:
+                print("Bootstrap: failed to download Ookla install script")
+            else:
+                script = dl.stdout
+                # Basic sanity check: must start with a shebang and contain
+                # expected keywords — rejects HTML error pages, redirects, etc.
+                if script[:2] == b"#!" and b"speedtest" in script.lower():
+                    with tempfile.NamedTemporaryFile(suffix=".sh", delete=False) as tf:
+                        tf.write(script)
+                        tf_path = tf.name
+                    os.chmod(tf_path, 0o700)
+                    subprocess.run(["sh", tf_path], check=False)
+                    os.unlink(tf_path)
+                else:
+                    print("Bootstrap: Ookla install script failed sanity check — skipping")
+        except Exception as e:
+            print(f"Bootstrap: Ookla install error: {e}")
     print("Bootstrap: done.")
 
 bootstrap()
@@ -39,6 +61,12 @@ import xml.etree.ElementTree as ET
 import asyncio
 from collections import deque
 from datetime import datetime, timezone
+
+# Suppress the urllib3 InsecureRequestWarning that would fire on every TrueNAS
+# HTTPS request — we're intentionally skipping cert verification for a LAN host
+# that typically uses a self-signed certificate.
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # ═══════════════════════════════════════════════════════
 # CONFIGURATION - all values come from environment / .env
@@ -494,8 +522,17 @@ def run_speedtest():
 
     print("All speedtest methods failed")
 
+_speedtest_running = threading.Event()
+
 def schedule_speedtest():
-    run_speedtest()
+    if _speedtest_running.is_set():
+        print("Speedtest: previous run still in progress — skipping this cycle")
+    else:
+        _speedtest_running.set()
+        try:
+            run_speedtest()
+        finally:
+            _speedtest_running.clear()
     threading.Timer(SPEEDTEST_INTERVAL, schedule_speedtest).start()
 
 def get_speedtest_result():
@@ -904,8 +941,8 @@ def fetch_page9():
     try:
         headers = {"Authorization": f"Bearer {TRUENAS_KEY}"}
         r = requests.get(
-            f"http://{TRUENAS_IP}/api/v2.0/pool",
-            headers=headers, timeout=5
+            f"https://{TRUENAS_IP}/api/v2.0/pool",
+            headers=headers, timeout=5, verify=False
         )
         if r.status_code == 200:
             pools = r.json()
@@ -913,8 +950,8 @@ def fetch_page9():
                 name = pool.get("name", "unknown")
                 status = pool.get("status", "unknown")
                 r2 = requests.get(
-                    f"http://{TRUENAS_IP}/api/v2.0/pool/dataset",
-                    headers=headers, timeout=5,
+                    f"https://{TRUENAS_IP}/api/v2.0/pool/dataset",
+                    headers=headers, timeout=5, verify=False,
                     params={"name": name}
                 )
                 if r2.status_code == 200:
@@ -950,7 +987,18 @@ def fetch_page9():
 # PAGE 10: Discord Recent Messages
 # ═══════════════════════════════════════════════════════
 
+_fetch_page10_lock = threading.Semaphore(1)
+
 def fetch_page10():
+    if not _fetch_page10_lock.acquire(blocking=False):
+        print("fetch_page10: already running — skipping this trigger")
+        return
+    try:
+        _fetch_page10_impl()
+    finally:
+        _fetch_page10_lock.release()
+
+def _fetch_page10_impl():
     headers = {
         "Authorization": f"Bot {DISCORD_TOKEN}",
         "Content-Type": "application/json"
@@ -1148,6 +1196,12 @@ def ami_send(action: str):
 
 def ami_originate(extension: str, callerid: str = "Calico <2001>") -> bool:
     """Originate a call from the phone's line 1 to an extension."""
+    # Strip anything that isn't a valid dialstring character to prevent
+    # CRLF injection into the raw AMI protocol stream.
+    extension = re.sub(r"[^0-9A-Za-z+#*@._-]", "", extension)
+    if not extension:
+        print("ami_originate: empty extension after sanitisation — aborting")
+        return False
     action = (
         f"Action: Originate\r\n"
         f"Channel: PJSIP/oak-line1\r\n"
@@ -1398,9 +1452,11 @@ def start_discord_bot():
             color=discord.Color.from_rgb(253, 105, 0)
         )
         await interaction.response.send_message(embed=embed)
-        await asyncio.sleep(1)
+        # Give discord.py time to flush the response before hard-exiting.
+        # threading.Timer runs outside the event loop so it won't be cancelled
+        # when the loop exits — the container restart will fire reliably.
         write_asterisk_configs()
-        os._exit(0)
+        threading.Timer(2, lambda: os._exit(0)).start()
 
     @tree.command(name="birchabout", description="Who Birch is")
     async def slash_birchabout(interaction: discord.Interaction):
@@ -1773,16 +1829,27 @@ def start_discord_bot():
             if looks_like_injection(message.content or ""):
                 await alert_injection(message.author, "DM", message.content or "")
                 return
-            last_dm = DM_COOLDOWNS.get(message.author.id)
-            if last_dm and (datetime.now() - last_dm).total_seconds() < DM_COOLDOWN_SECONDS:
-                remaining = DM_COOLDOWN_SECONDS - int((datetime.now() - last_dm).total_seconds())
+            # Cooldown check: read and write under the same lock to prevent
+            # a TOCTOU race where two near-simultaneous DMs both pass the check.
+            now_dt = datetime.now()
+            with _DM_LOCK:
+                last_dm = DM_COOLDOWNS.get(message.author.id)
+                if last_dm and (now_dt - last_dm).total_seconds() < DM_COOLDOWN_SECONDS:
+                    remaining = DM_COOLDOWN_SECONDS - int((now_dt - last_dm).total_seconds())
+                    # Release lock before awaiting I/O
+                    do_cooldown = True
+                else:
+                    DM_COOLDOWNS[message.author.id] = now_dt
+                    do_cooldown = False
+            if do_cooldown:
                 await message.reply(embed=discord.Embed(
                     title="Slow down!",
                     description=f"You can send another message in {remaining}s.",
                     color=discord.Color.red()
                 ))
                 return
-            DM_COOLDOWNS[message.author.id] = datetime.now()
+            # Prune stale entries opportunistically (non-blocking)
+            threading.Thread(target=_prune_cooldowns, daemon=True).start()
 
         if looks_like_injection(message.content or ""):
             await alert_injection(message.author, "DM", message.content or "")
@@ -1795,14 +1862,16 @@ def start_discord_bot():
             "time": datetime.now(),
         }
         if message.author.id in PRIORITY_USER_IDS:
-            DM_MESSAGE_PRIORITY = dm_entry
+            with _DM_LOCK:
+                DM_MESSAGE_PRIORITY = dm_entry
             fetch_page12()
             write_idle_cycle_immediate("page12.xml", hold_secs=MWI_DM_DURATION)
             if AMI_CONNECTED:
                 ami_originate(ASTERISK_LINE1_NUMBER, f"Priority DM <{ASTERISK_LINE1_NUMBER}>")
         else:
-            DM_MESSAGE = dm_entry
-            DM_RECEIVED_AT = datetime.now()
+            with _DM_LOCK:
+                DM_MESSAGE = dm_entry
+                DM_RECEIVED_AT = datetime.now()
             fetch_page11()
             write_idle_cycle_immediate("page11.xml", hold_secs=MWI_DM_DURATION)
         threading.Thread(target=update_mwi, daemon=True).start()
@@ -1976,6 +2045,19 @@ DM_MESSAGE = None
 DM_RECEIVED_AT = None
 DM_MESSAGE_PRIORITY = None
 DM_COOLDOWNS = {}
+# Protects all DM_* globals and DM_COOLDOWNS against concurrent mutation from
+# the Discord async thread and the fetch/MWI threads.
+_DM_LOCK = threading.Lock()
+
+
+def _prune_cooldowns():
+    """Remove cooldown entries older than DM_COOLDOWN_SECONDS to prevent unbounded growth."""
+    now = datetime.now()
+    with _DM_LOCK:
+        expired = [uid for uid, ts in DM_COOLDOWNS.items()
+                   if (now - ts).total_seconds() >= DM_COOLDOWN_SECONDS]
+        for uid in expired:
+            del DM_COOLDOWNS[uid]
 
 # ═══════════════════════════════════════════════════════
 # MWI - Message Waiting Indicator
@@ -2123,9 +2205,10 @@ write_idle_cycle = write_cycle_ring
 # ═══════════════════════════════════════════════════════
 
 DUMP_ACTIVE = False
+_dump_delete_timer = None
 
 def dump_to_disk():
-    global DUMP_ACTIVE
+    global DUMP_ACTIVE, _dump_delete_timer
     written = []
     for filename, xml in PAGE_CACHE.items():
         try:
@@ -2136,11 +2219,18 @@ def dump_to_disk():
             print(f"Dump error for {filename}: {e}")
     DUMP_ACTIVE = True
     print(f"Dumped {len(written)} files to disk")
-    threading.Timer(6 * 3600, delete_dump).start()
+    # Cancel any existing auto-delete timer before scheduling a fresh one,
+    # so multiple /meowdump calls don't stack up competing timers.
+    if _dump_delete_timer is not None:
+        _dump_delete_timer.cancel()
+    _dump_delete_timer = threading.Timer(6 * 3600, delete_dump)
+    _dump_delete_timer.daemon = True
+    _dump_delete_timer.start()
     return written
 
 def delete_dump():
-    global DUMP_ACTIVE
+    global DUMP_ACTIVE, _dump_delete_timer
+    _dump_delete_timer = None
     removed = []
     for filename in list(PAGE_CACHE.keys()):
         filepath = os.path.join(OUTPUT_DIR, filename)
