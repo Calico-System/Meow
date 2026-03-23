@@ -67,20 +67,24 @@ dtmf_inband: 1
 dtmf_outofband: avt
 
 ; =====================
-; Line 1
+; Line 1 — Calico internal (Asterisk)
 ; =====================
-line1_name: 1001
-line1_authname: your-sipcord-username
-line1_password: your-sipcord-password
-line1_displayname: Your Display Name
+; Line 1 registers to the local Asterisk container.
+; Set ASTERISK_LINE1_SECRET in .env and use the same password here.
+line1_name: 2001
+line1_authname: oak-line1
+line1_password: examplepassword
+line1_displayname: Calico
+line1_proxy1_address: YOUR_SERVER_IP
+line1_proxy1_port: 5062
 
 ; =====================
-; Line 2 (optional — remove if not needed)
+; Line 2 — SIPcord (external)
 ; =====================
-line2_name: 1002
+line2_name: 1001
 line2_authname: your-sipcord-username
 line2_password: your-sipcord-password
-line2_displayname: SIPcord General
+line2_displayname: SIPcord
 
 ; =====================
 ; Phone Label

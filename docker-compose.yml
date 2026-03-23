@@ -10,6 +10,20 @@ services:
       # Firmware, dialplan, and SIP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
 
+  # Asterisk — internal PBX for Oak's line 2 and Calico component communication
+  asterisk:
+    image: andrius/asterisk
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      # entrypoint.sh lives here; configs are generated into the same dir on startup
+      - /mnt/pool/Apps/Calico/Meow/asterisk:/etc/asterisk
+    command: sh /etc/asterisk/entrypoint.sh
+    env_file:
+      - /mnt/pool/Apps/Calico/Meow/.env
+    cap_add:
+      - NET_ADMIN
+
   # Meow — HTTP server, Discord bot, data fetcher
   dashboard:
     image: python:3.12-alpine

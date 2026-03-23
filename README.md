@@ -36,10 +36,12 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 ## Requirements
 
 - Cisco 7940G (tested) or 7960G
-- A [SIPcord](https://sipcord.net) account
+- A [SIPcord](https://sipcord.net) account (line 1)
 - Docker + Docker Compose on a machine accessible from the phone's LAN
 - A Discord bot token ([create one here](https://discord.com/developers))
 - The Cisco SIP firmware files for `P0S3-8-12-00` (not included - source these yourself)
+
+Line 2 on the phone registers to a local Asterisk container included in the compose file — no external account needed.
 
 ---
 
@@ -150,6 +152,8 @@ Meow/
 │   └── SIP_YOURMAC_.cnf.example
 ├── http/
 │   └── logo.bmp
+├── asterisk/
+│   └── entrypoint.sh             # Templates Asterisk configs from .env on startup
 ├── .github/
 │   └── assets/
 │       ├── meowlogo.png
@@ -168,6 +172,18 @@ Meow/
 Meow includes injection detection across all user input surfaces — DMs, server messages piped to the phone, and `/meowmessage`. It checks for XML injection, Cisco XML element injection, path traversal, and SQL injection patterns.
 
 If an attempt is detected the owner receives a DM alert with the user's name, ID, source, and content. For DMs the attacker also receives a response letting them know it won't work. Server message attempts are silently filtered and flagged to the owner only.
+
+---
+
+## Ports
+
+| Port | Protocol | Service | Purpose |
+|------|----------|---------|---------|
+| 69 | UDP | TFTP | Serves firmware and config files to the phone on boot |
+| 70 | TCP | HTTP | Serves XML pages, directory, logo and health check to the phone |
+| 5060 | UDP | SIPcord | External SIP — handled by the phone directly, not the server |
+| 5062 | UDP/TCP | Asterisk | Internal SIP — Oak line 1, Calico component registration |
+| 10000–10020 | UDP | Asterisk RTP | Audio media streams for internal calls (supports up to 10 simultaneous) |
 
 ---
 
