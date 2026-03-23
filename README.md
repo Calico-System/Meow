@@ -4,7 +4,7 @@
 
 A Discord bot and provisioned IP phone dashboard.
 
-**Birch** and **Oak** make themselves known across the Calico system. Here, Birch works through a Discord bot and Oak through a 2001 Cisco 7940G desk phone that should probably be in a landfill by now. Runs on TrueNAS with Docker.
+**Birch** (the discord bot) and **Oak** (the home assistant system) make themselves known across the Calico system. Here, Birch works through a Discord bot and Oak through a 2001 Cisco 7940G desk phone that should probably be in a landfill by now. Runs on TrueNAS with Docker.
 
 Part of [Calico](https://github.com/Calico-System), though not all of it is custom built like this.
 
