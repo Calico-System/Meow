@@ -4,6 +4,7 @@
 # Personal phone config — use the .example versions as templates
 SIPDefault.cnf
 SIP_*.cnf
+SIP*.cnf
 http/directory.xml
 
 # Cisco firmware — do not redistribute publicly

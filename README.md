@@ -36,12 +36,12 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 ## Requirements
 
 - Cisco 7940G (tested) or 7960G
-- A [SIPcord](https://sipcord.net) account (line 1)
+- A [SIPcord](https://sipcord.net) account (line 2)
 - Docker + Docker Compose on a machine accessible from the phone's LAN
 - A Discord bot token ([create one here](https://discord.com/developers))
 - The Cisco SIP firmware files for `P0S3-8-12-00` (not included - source these yourself)
 
-Line 2 on the phone registers to a local Asterisk container included in the compose file — no external account needed.
+Line 1 on the phone registers to a local Asterisk container included in the compose file — no external account needed. Line 2 is SIPcord.
 
 ---
 
@@ -84,7 +84,7 @@ docker compose up -d
 
 ### 5. Point the phone at the TFTP server
 
-On the phone: **Settings → Network Configuration → TFTP Server** → enter your server's IP. The phone will reboot, pull its firmware and config, and register with SIPcord.
+On the phone: **Settings → Network Configuration → TFTP Server** → enter your server's IP. The phone will reboot, pull its firmware and config, and register on both lines — line 1 to the local Asterisk container, line 2 to SIPcord.
 
 ---
 
