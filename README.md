@@ -106,6 +106,8 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 | `PRIORITY_LABEL` | priority users | Label for priority users in bot messages |
 | `DIRECTORY_ENTRY_1_NAME` | - | Phone directory entry name (up to 10 entries) |
 | `DIRECTORY_ENTRY_1_NUMBER` | - | Phone directory entry extension number |
+| `ASTERISK_AMI_SECRET` | - | Asterisk Manager Interface password |
+| `ASTERISK_AMI_CALL_CHANNEL_ID` | - | Discord channel ID for call event notifications |
 
 ---
 
@@ -130,6 +132,8 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 | `/meowdump` | Owner | Write pages to disk for debugging |
 | `/meowpurge` | Owner | Delete all output files |
 | `/meowrestart` | Owner | Restart the container to apply updated code |
+| `/meowcall <extension>` | Owner | Originate a call from Oak to an extension |
+| `/meowcalls` | Owner | Show active calls on the Calico PBX |
 | `/meowhelp` | Everyone | Meow commands and page guide |
 
 ### Calico
@@ -183,6 +187,7 @@ If an attempt is detected the owner receives a DM alert with the user's name, ID
 | 70 | TCP | HTTP | Serves XML pages, directory, logo and health check to the phone |
 | 5060 | UDP | SIPcord | External SIP — handled by the phone directly, not the server |
 | 5062 | UDP/TCP | Asterisk | Internal SIP — Oak line 1, Calico component registration |
+| 5038 | TCP | Asterisk AMI | Manager Interface — used internally by fetch.py only, not exposed externally |
 | 10000–10020 | UDP | Asterisk RTP | Audio media streams for internal calls (supports up to 10 simultaneous) |
 
 ---

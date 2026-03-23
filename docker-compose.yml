@@ -10,21 +10,23 @@ services:
       # Firmware, dialplan, and SIP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
 
-  # Asterisk — internal PBX for Oak's line 2 and Calico component communication
+  # Asterisk — internal PBX for Oak's line 1 and Calico component communication
+  # Waits 10 seconds for fetch.py to write configs before starting
   asterisk:
     image: andrius/asterisk
     network_mode: host
     restart: unless-stopped
     volumes:
-      # entrypoint.sh lives here; configs are generated into the same dir on startup
+      # Configs written here by fetch.py on startup
       - /mnt/pool/Apps/Calico/Meow/asterisk:/etc/asterisk
-    command: sh /etc/asterisk/entrypoint.sh
-    env_file:
-      - /mnt/pool/Apps/Calico/Meow/.env
+    command: sh -c "sleep 10 && asterisk -f"
+    depends_on:
+      - dashboard
     cap_add:
       - NET_ADMIN
 
   # Meow — HTTP server, Discord bot, data fetcher
+  # Writes Asterisk configs on startup before Asterisk reads them
   dashboard:
     image: python:3.12-alpine
     restart: unless-stopped
@@ -36,6 +38,8 @@ services:
       - /mnt/pool/Apps/Calico/Meow/bot:/app
       # Static files (logo.bmp) and runtime output (speedtest cache)
       - /mnt/pool/Apps/Calico/Meow/http:/output
+      # Shared volume for Asterisk config generation
+      - /mnt/pool/Apps/Calico/Meow/asterisk:/etc/asterisk
     working_dir: /app
     command: python fetch.py
     env_file:
