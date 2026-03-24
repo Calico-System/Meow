@@ -183,6 +183,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 SPEEDTEST_CACHE = os.path.join(OUTPUT_DIR, ".speedtest_cache.json")
 
 # ── Module-level XML helpers ────────────────────────────────────────────────
+_XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>\n'
+
 def _sanitize_xml(s):
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -200,7 +202,7 @@ def get_status_data():
     return dict(STATUS_CACHE)
 
 def write_xml_refresh(filename, title, text, refresh_secs, refresh_url):
-    xml = f'''<CiscoIPPhoneText Refresh="{refresh_secs}" URL="{refresh_url}">
+    xml = f'''{_XML_DECL}<CiscoIPPhoneText Refresh="{refresh_secs}" URL="{refresh_url}">
   <Title>{_sanitize_xml(title)}</Title>
   <Prompt>Updated: {datetime.now().strftime('%H:%M')}</Prompt>
   <Text>{_to_phone_text(text)}</Text>
@@ -210,7 +212,7 @@ def write_xml_refresh(filename, title, text, refresh_secs, refresh_url):
 
 def write_xml(filename, title, text):
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
-    xml = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{idle_url}">
+    xml = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{idle_url}">
   <Title>{_sanitize_xml(title)}</Title>
   <Prompt>Updated: {datetime.now().strftime('%H:%M')}</Prompt>
   <Text>{_to_phone_text(text)}</Text>
@@ -2072,66 +2074,66 @@ def fetch_page12():
 def write_menus():
     base = f"http://{SERVER_IP}:{HTTP_PORT}"
 
-    info_menu = f"""<CiscoIPPhoneMenu>
+    info_menu = f"""{_XML_DECL}<CiscoIPPhoneMenu>
   <Title>Info Services</Title>
   <Prompt>Select a page</Prompt>
   <MenuItem>
-    <n>Weather</n>
+    <Name>Weather</Name>
     <URL>{base}/page1_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>BBC News</n>
+    <Name>BBC News</Name>
     <URL>{base}/page2_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Economy</n>
+    <Name>Economy</Name>
     <URL>{base}/page3_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Space</n>
+    <Name>Space</Name>
     <URL>{base}/page4_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>History</n>
+    <Name>History</Name>
     <URL>{base}/page5_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Fun</n>
+    <Name>Fun</Name>
     <URL>{base}/page6_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Status &amp; Pings</n>
+    <Name>Status &amp; Pings</Name>
     <URL>{base}/page7_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Speedtest</n>
+    <Name>Speedtest</Name>
     <URL>{base}/page8_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Servers</n>
+    <Name>Servers</Name>
     <URL>{base}/page9_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Discord Activity</n>
+    <Name>Discord Activity</Name>
     <URL>{base}/page10_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Latest DM</n>
+    <Name>Latest DM</Name>
     <URL>{base}/page11_full.xml</URL>
   </MenuItem>
   <MenuItem>
-    <n>Priority DM</n>
+    <Name>Priority DM</Name>
     <URL>{base}/page12_full.xml</URL>
   </MenuItem>
 </CiscoIPPhoneMenu>"""
     PAGE_CACHE["infoservices.xml"] = info_menu
     print("Cached infoservices.xml (memory)")
 
-    main_menu = f"""<CiscoIPPhoneMenu>
+    main_menu = f"""{_XML_DECL}<CiscoIPPhoneMenu>
   <Title>Meow Services</Title>
   <Prompt>Select an option</Prompt>
   <MenuItem>
-    <n>Info Services</n>
+    <Name>Info Services</Name>
     <URL>{base}/infoservices.xml</URL>
   </MenuItem>
 </CiscoIPPhoneMenu>"""
@@ -2140,12 +2142,12 @@ def write_menus():
 
     entries_xml = ""
     for name, number in DIRECTORY_ENTRIES:
-        safe_name   = name.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        safe_number = number.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        safe_name   = _sanitize_xml(name)
+        safe_number = _sanitize_xml(number)
         entries_xml += f"  <DirectoryEntry>\n    <Name>{safe_name}</Name>\n    <Telephone>{safe_number}</Telephone>\n  </DirectoryEntry>\n"
     if not entries_xml:
         entries_xml = "  <DirectoryEntry>\n    <Name>No entries configured</Name>\n    <Telephone>0</Telephone>\n  </DirectoryEntry>\n"
-    directory = f"""<CiscoIPPhoneDirectory>
+    directory = f"""{_XML_DECL}<CiscoIPPhoneDirectory>
   <Title>Directory</Title>
   <Prompt>Select to dial</Prompt>
 {entries_xml}</CiscoIPPhoneDirectory>"""
@@ -2239,7 +2241,7 @@ def schedule_mwi_clear():
 def write_idle_cycle_immediate(page, hold_secs=None):
     base = f"http://{SERVER_IP}:{HTTP_PORT}"
     secs = hold_secs if hold_secs is not None else IDLE_CYCLE_SECONDS
-    content = f"""<CiscoIPPhoneText Refresh="{secs}" URL="{base}/{page}">
+    content = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="{secs}" URL="{base}/{page}">
   <Title>Meow</Title>
   <Prompt>New message!</Prompt>
   <Text>Loading...</Text>
@@ -2282,7 +2284,7 @@ def write_cycle_ring():
     active_pages = _get_active_pages()
 
     if len(active_pages) == 1:
-        content = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{active_pages[0]}">
+        content = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{active_pages[0]}">
   <Title>Meow</Title>
   <Prompt>New message!</Prompt>
   <Text>Loading...</Text>
@@ -2302,12 +2304,14 @@ def write_cycle_ring():
         next_filename = available_pages[(i + 1) % len(available_pages)]
         next_url = f"{base}/{next_filename}"
         xml = PAGE_CACHE[filename]
-        xml = re.sub(r'(<CiscoIPPhoneText[^>]*Refresh="[^"]*"\s+URL=")[^"]*(")',
-                     rf'\g<1>{next_url}\g<2>', xml)
+        # Replace the URL attribute on the root CiscoIPPhoneText element.
+        # count=1 is safe because our generated XML never has URL="..." in
+        # element content — only as the single attribute on the root tag.
+        xml = re.sub(r'URL="[^"]*"', f'URL="{next_url}"', xml, count=1)
         PAGE_CACHE[filename] = xml
 
     entry = available_pages[random.randrange(len(available_pages))]
-    content = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{entry}">
+    content = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{base}/{entry}">
   <Title>Meow</Title>
   <Prompt>Auto-cycling every {IDLE_CYCLE_SECONDS}s</Prompt>
   <Text>Loading...</Text>
@@ -2434,7 +2438,7 @@ if __name__ == "__main__":
     # Write idle.xml placeholder immediately so the phone never gets a 404
     # even if it polls before the first fetch cycle completes
     base = f"http://{SERVER_IP}:{HTTP_PORT}"
-    PAGE_CACHE["idle.xml"] = f"""<CiscoIPPhoneText Refresh="10" URL="{base}/idle.xml">
+    PAGE_CACHE["idle.xml"] = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="10" URL="{base}/idle.xml">
   <Title>Meow</Title>
   <Prompt>Starting up...</Prompt>
   <Text>Loading pages, please wait...</Text>

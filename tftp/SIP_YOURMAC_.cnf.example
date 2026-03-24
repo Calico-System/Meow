@@ -19,6 +19,15 @@ proxy_register: 1
 nat_enable: 1
 nat_address: your-duckdns-address.duckdns.org
 register_expires: 120
+; proxy1_port: 5060
+; proxy2_address: your-backup-proxy.example.com
+; proxy2_port: 5060
+; outbound_proxy: your-outbound-proxy.example.com
+; outbound_proxy_port: 5060
+; nat_received_processing: 0
+; sip_port: 5060
+; start_media_port: 16384
+; end_media_port: 32766
 
 ; =====================
 ; Time & Clock (UK)
@@ -45,6 +54,10 @@ dst_auto_adjust: 1
 services_url: http://YOUR_SERVER_IP:70/services.xml
 directory_url: http://YOUR_SERVER_IP:70/directory.xml
 logo_url: http://YOUR_SERVER_IP:70/logo.bmp
+; messages_uri: sip:voicemail@YOUR_SERVER_IP
+; call_logging_uri: http://YOUR_SERVER_IP:70/calllog.xml
+; idle_url: http://YOUR_SERVER_IP:70/idle.xml
+; idle_url_time: 5                        ; seconds before idle URL is fetched
 
 ; =====================
 ; Dialplan
@@ -58,6 +71,9 @@ call_waiting: 1
 call_hold_ringback: 1
 dnd_control: 1
 transfer_on_hangup: 0
+; anon_call_block: 0
+; callerid_blocking: 0
+; remote_party_id: 0
 
 ; =====================
 ; Audio
@@ -65,6 +81,7 @@ transfer_on_hangup: 0
 preferred_codec: g711ulaw
 dtmf_inband: 1
 dtmf_outofband: avt
+; silence_suppression: 0
 
 ; =====================
 ; Line 1 — Calico internal (Asterisk)
@@ -77,6 +94,8 @@ line1_password: examplepassword
 line1_displayname: Calico
 line1_proxy1_address: YOUR_SERVER_IP
 line1_proxy1_port: 5062
+; line1_shortname: L1
+; line1_ring_setting: 1
 
 ; =====================
 ; Line 2 — SIPcord (external)
@@ -85,9 +104,63 @@ line2_name: 1001
 line2_authname: your-sipcord-username
 line2_password: your-sipcord-password
 line2_displayname: SIPcord
+; line2_proxy1_address: bridge-eu1.sipcord.net
+; line2_proxy1_port: 5060
+; line2_shortname: L2
+; line2_ring_setting: 1
+
+; =====================
+; Lines 3–6 (Cisco 7960G only)
+; =====================
+; line3_name:
+; line3_authname:
+; line3_password:
+; line3_displayname:
+; line3_proxy1_address:
+; line3_proxy1_port: 5060
+; line3_shortname:
+; line3_ring_setting: 1
+;
+; line4_name:
+; line4_authname:
+; line4_password:
+; line4_displayname:
+; line4_proxy1_address:
+; line4_proxy1_port: 5060
+; line4_shortname:
+; line4_ring_setting: 1
+;
+; line5_name:
+; line5_authname:
+; line5_password:
+; line5_displayname:
+; line5_proxy1_address:
+; line5_proxy1_port: 5060
+; line5_shortname:
+; line5_ring_setting: 1
+;
+; line6_name:
+; line6_authname:
+; line6_password:
+; line6_displayname:
+; line6_proxy1_address:
+; line6_proxy1_port: 5060
+; line6_shortname:
+; line6_ring_setting: 1
+
+; =====================
+; Display
+; =====================
+; contrast: 69                            ; 0–100
+; user_localize: English_United_States
 
 ; =====================
 ; Phone Label
 ; =====================
 phone_label: YourLabel
 idle_display_text: SIPCord
+
+; =====================
+; Logging
+; =====================
+; log_server: your-syslog-server.example.com
