@@ -688,7 +688,16 @@ def fetch_page3():
 
     def fetch_exchange():
         nonlocal exchange_text
-        r = safe_get(f"https://api.exchangerate-api.com/v4/latest/{NEWS_BASE_CURRENCY}")
+        # frankfurter.app uses ECB reference rates, is open-source, and has no
+        # documented rate limits — replacing exchangerate-api.com v4 which is
+        # capped at 1500 free requests/month (our 5-min cycle uses ~8 600/month).
+        # Exclude the base currency itself from the symbols list; frankfurter
+        # returns an error if the base appears in the target set.
+        symbols = ",".join(s for s in ["EUR", "USD"] if s != NEWS_BASE_CURRENCY)
+        r = safe_get(
+            "https://api.frankfurter.app/latest",
+            params={"base": NEWS_BASE_CURRENCY, "symbols": symbols},
+        )
         if r:
             rates = r.json().get("rates", {})
             eur = rates.get("EUR")
@@ -772,9 +781,15 @@ def fetch_page5():
     history_text = "History: Unavailable"
     history_text_full = "History: Unavailable"
     today = datetime.now()
-    r = safe_get(f"http://history.muffinlabs.com/date/{today.month}/{today.day}")
+    # Wikipedia "On This Day" REST API — HTTPS, maintained by Wikimedia Foundation,
+    # more reliable than the previous muffinlabs.com HTTP endpoint.
+    r = safe_get(
+        f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/events"
+        f"/{today.month:02d}/{today.day:02d}",
+        headers={"Accept": "application/json"}
+    )
     if r:
-        events = r.json().get("data", {}).get("Events", [])
+        events = r.json().get("events", [])
         if events:
             pick = random.choice(events[:20])
             year = pick.get("year", "")
@@ -949,17 +964,38 @@ def fetch_page7():
 # PAGE 9: Servers (Minecraft + TrueNAS)
 # ═══════════════════════════════════════════════════════
 
+# Legacy Server List Ping request (Minecraft ≥ 1.4, still honoured by all
+# modern servers for backward compatibility).
+_MC_LEGACY_PING_REQUEST  = b'\xfe\x01'
+# Response always starts with 0xFF followed by a 2-byte UTF-16 char count.
+_MC_LEGACY_PING_RESPONSE = 0xff
+
 def fetch_page9():
     global MC_HAS_PLAYERS
     mc_lines = [f"--- {MINECRAFT_SERVER_NAME.upper()} ---"]
+    sock2 = None
     try:
         sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock2.settimeout(3)
         sock2.connect((MINECRAFT_IP, MINECRAFT_PORT))
-        sock2.send(b'\xfe\x01')
-        data = sock2.recv(1024)
-        sock2.close()
-        if data and len(data) > 3 and data[0] == 0xff:
+        # Legacy Server List Ping (still supported by all modern Minecraft servers)
+        sock2.sendall(_MC_LEGACY_PING_REQUEST)
+        # Read until we have the full response: 0xFF + 2-byte char count + UTF-16BE payload
+        data = b''
+        while len(data) < 3:
+            chunk = sock2.recv(1024)
+            if not chunk:
+                break
+            data += chunk
+        if data and data[0] == _MC_LEGACY_PING_RESPONSE and len(data) >= 3:
+            char_count = (data[1] << 8) | data[2]
+            total_expected = 3 + char_count * 2
+            while len(data) < total_expected:
+                chunk = sock2.recv(1024)
+                if not chunk:
+                    break
+                data += chunk
+        if data and len(data) > 3 and data[0] == _MC_LEGACY_PING_RESPONSE:
             try:
                 raw = data[3:].decode('utf-16-be', errors='ignore')
                 parts = raw.split('\x00')
@@ -989,6 +1025,12 @@ def fetch_page9():
     except Exception as e:
         MC_HAS_PLAYERS = False
         mc_lines.append(f"Error: {str(e)[:20]}")
+    finally:
+        if sock2 is not None:
+            try:
+                sock2.close()
+            except Exception:
+                pass
 
     nas_lines = ["--- TRUENAS ---"]
     try:
