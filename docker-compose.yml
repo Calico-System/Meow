@@ -35,7 +35,6 @@ services:
   # Writes Asterisk configs on startup before Asterisk reads them
   dashboard:
     image: python:3.12-alpine
-    command: python /app/fetch.py
     restart: unless-stopped
     ports:
       # HTTP port served to the phone for XML pages
@@ -47,6 +46,8 @@ services:
       - /mnt/pool/Apps/Calico/Meow/http:/output
       # Shared volume for Asterisk config generation
       - /mnt/pool/Apps/Calico/Meow/asterisk:/etc/asterisk
+    working_dir: /app
+    command: python fetch.py
     env_file:
       # Copy .env.example to .env and fill in your values
       - /mnt/pool/Apps/Calico/Meow/.env
