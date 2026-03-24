@@ -3,9 +3,20 @@ services:
   # TFTP server — serves firmware and config files to the phone on boot
   tftp:
     image: palw3ey/ye3tftp
-    ports:
-      - 69:69/udp
+    network_mode: host
     restart: unless-stopped
+    # network_mode: host is required for TFTP to work reliably.
+    # TFTP is a two-phase UDP protocol: the client sends the initial RRQ to
+    # port 69, but the server replies from a *random* ephemeral port (TID).
+    # With Docker bridge networking only port 69 is published, so the server's
+    # random-port replies are NATed back through a connection that the kernel
+    # has no tracking entry for (this requires the nf_conntrack_tftp module,
+    # which is not present on all hosts — notably TrueNAS/FreeBSD). The result
+    # is that the initial request succeeds but every data packet is silently
+    # dropped, causing transfers to time out. With host networking in.tftpd
+    # binds directly to the host interface; no NAT is involved and both phases
+    # of the TFTP exchange reach the phone correctly.
+    #
     # The host-mounted /data volume is typically drwxrwx--- (0770), giving
     # "others" no access. in.tftpd drops privileges in --secure mode, so it
     # runs as an unprivileged user and gets "Permission denied" on the directory
@@ -20,13 +31,24 @@ services:
     # firmware files (.sbn, .bin, .sb2, .tar, …) are covered alongside
     # config files (.cnf, .xml, .txt, …). Without this, in.tftpd's
     # unprivileged user gets "Access violation" on any unlisted extension.
+    #
+    # in.tftpd is run in the background (not via exec) and kept alive with
+    # "wait". Running it as PID 1 via "exec" means any binding failure (e.g.
+    # the OS still holding port 69 from a previous container restart) would
+    # immediately kill the container. Running in background lets the script
+    # emit log lines that TrueNAS's log viewer can display, and "wait" keeps
+    # the container alive while propagating signals correctly.
     entrypoint:
       - sh
       - -c
       - |
         chmod 755 /data
         chmod 644 /data/* 2>/dev/null || true
-        exec /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /data
+        echo "Starting in.tftpd on 0.0.0.0:69"
+        /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /data &
+        TFTPD_PID=$!
+        echo "in.tftpd running (PID ${TFTPD_PID})"
+        wait ${TFTPD_PID}
     volumes:
       # Firmware, dialplan, and SIP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
