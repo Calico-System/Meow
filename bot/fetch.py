@@ -1561,7 +1561,7 @@ def start_discord_bot():
             description=(
                 "I'm Birch. I keep an eye on things.\n"
                 "Weather, news, exchange rates, rocket launches, the grid, your servers - I keep track.\n"
-                "DM me and I'll put it on the screen.\n"
+                "DM me and I'll put it on the screen. Voice messages coming soon.\n"
                 "Part of Calico."
             ),
             color=discord.Color.from_rgb(253, 105, 0)
