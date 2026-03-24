@@ -236,8 +236,8 @@ The compose file's `entrypoint` wrapper already handles this at container startu
 by running:
 
 ```
-chmod 755 /data                          # directory: traversable by all
-chmod 644 /data/*.cnf /data/*.xml ...   # files: readable by all
+chmod 755 /data     # directory: traversable by all
+chmod 644 /data/*   # all files: readable by all (covers firmware + config)
 ```
 
 **TrueNAS / ZFS note:** If you use a POSIX or NFSv4 ACL on the dataset, a bare

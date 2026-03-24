@@ -12,15 +12,20 @@ services:
     # and any files that aren't world-readable.
     #
     # This entrypoint wrapper runs before in.tftpd:
-    #   chmod 755 /data        — makes the directory world-traversable
-    #   chmod 644 /data/*.*    — makes served files world-readable (best-effort;
-    #                            unmatched globs are suppressed and do not abort)
+    #   chmod 755 /data   — makes the directory world-traversable
+    #   chmod 644 /data/* — makes all served files world-readable (best-effort;
+    #                        unmatched globs are suppressed and do not abort)
+    #
+    # Using a wildcard instead of listing specific extensions ensures that
+    # firmware files (.sbn, .bin, .sb2, .tar, …) are covered alongside
+    # config files (.cnf, .xml, .txt, …). Without this, in.tftpd's
+    # unprivileged user gets "Access violation" on any unlisted extension.
     entrypoint:
       - sh
       - -c
       - |
         chmod 755 /data
-        chmod 644 /data/*.cnf /data/*.xml /data/*.txt /data/*.loads /data/*.dat /data/*.tlv 2>/dev/null || true
+        chmod 644 /data/* 2>/dev/null || true
         exec /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /data
     volumes:
       # Firmware, dialplan, and SIP config files
