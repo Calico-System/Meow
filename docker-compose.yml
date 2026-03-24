@@ -34,11 +34,8 @@ services:
   # Meow — HTTP server, Discord bot, data fetcher
   # Writes Asterisk configs on startup before Asterisk reads them
   dashboard:
-    build:
-      # Build from bot/Dockerfile so Python dependencies are baked in and the
-      # startup bootstrap becomes a fast no-op.  Rebuild with:
-      #   docker compose build dashboard
-      context: /mnt/pool/Apps/Calico/Meow/bot
+    image: python:3.12-alpine
+    command: python /app/fetch.py
     restart: unless-stopped
     ports:
       # HTTP port served to the phone for XML pages
