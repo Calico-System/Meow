@@ -29,7 +29,6 @@ asterisk/manager.conf
 asterisk\manager.conf
 # Readiness marker written by fetch.py after config generation completes
 asterisk/.configs_written
-# asterisk/asterisk.conf and asterisk/modules.conf are safe to commit — no secrets
 
 # Python
 __pycache__/
@@ -42,3 +41,8 @@ Thumbs.db
 *.docx
 asterisk/manager.conf
 *.conf
+# asterisk/asterisk.conf and asterisk/modules.conf are already tracked (added before *.conf rule).
+# asterisk/logger.conf and asterisk/stasis.conf are safe to commit — no secrets.
+# Negation rules must follow the *.conf catch-all above.
+!asterisk/logger.conf
+!asterisk/stasis.conf
