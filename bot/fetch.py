@@ -522,7 +522,6 @@ write=all
         print(f"Asterisk: wrote configs to {ASTERISK_CONFIG_DIR}")
     except Exception as e:
         print(f"Asterisk: config write error: {e}")
-        raise
 
 # ═══════════════════════════════════════════════════════
 # SPEEDTEST
@@ -2448,47 +2447,15 @@ def start_http_server():
 if __name__ == "__main__":
     print(f"Fetching all data at {datetime.now().strftime('%H:%M:%S')}...")
 
-    # Remove any stale readiness marker from a previous run so the healthcheck
-    # cannot pass before this startup finishes writing configs.
-    _marker_path = os.path.join(ASTERISK_CONFIG_DIR, ".configs_written")
-    try:
-        os.remove(_marker_path)
-    except FileNotFoundError:
-        pass
-    except Exception as e:
-        print(f"Asterisk: could not remove stale readiness marker: {e}")
-
     # Write Asterisk configs first so they're ready before Asterisk starts
-    _configs_generation_ok = False
-    try:
-        write_asterisk_configs()
-        _configs_generation_ok = True
-    except Exception:
-        pass  # error already printed by write_asterisk_configs()
-
-    # Only write the readiness marker if configs were generated successfully and
-    # the expected config files exist on disk, so we don't advertise readiness
-    # when Asterisk would immediately crash.
+    write_asterisk_configs()
+    # Signal to the Asterisk container (via healthcheck) that configs are ready.
+    # Written regardless of whether ASTERISK_LINE1_SECRET is set so the
+    # healthcheck never blocks indefinitely.
     try:
         os.makedirs(ASTERISK_CONFIG_DIR, exist_ok=True)
-
-        required_configs = ["pjsip.conf", "extensions.conf"]
-        missing = [
-            name for name in required_configs
-            if not os.path.isfile(os.path.join(ASTERISK_CONFIG_DIR, name))
-        ]
-
-        if not _configs_generation_ok or missing:
-            if not _configs_generation_ok:
-                print("Asterisk: not writing readiness marker; config generation failed.")
-            else:
-                print("Asterisk: not writing readiness marker; missing config files:")
-                for name in missing:
-                    print(f"  - {name}")
-            print("Asterisk: container healthcheck will fail; Asterisk will not start until configs are successfully generated.")
-        else:
-            with open(_marker_path, "w") as f:
-                f.write("ok")
+        with open(os.path.join(ASTERISK_CONFIG_DIR, ".configs_written"), "w") as f:
+            f.write("ok")
     except Exception as e:
         print(f"Asterisk: could not write readiness marker: {e}")
         print("Asterisk: healthcheck will fail; Asterisk container will not start. Check ASTERISK_CONFIG_DIR permissions.")

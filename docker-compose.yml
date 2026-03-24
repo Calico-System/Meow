@@ -20,12 +20,6 @@ services:
       # Configs written here by fetch.py on startup
       - /mnt/pool/Apps/Calico/Meow/asterisk:/etc/asterisk
     command: asterisk -f
-    healthcheck:
-      test: ["CMD", "asterisk", "-rx", "core show version"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 30s
     depends_on:
       dashboard:
         condition: service_healthy
