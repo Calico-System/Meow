@@ -538,6 +538,7 @@ noload => app_getcpeid.so
 
     except Exception as e:
         print(f"Asterisk: error writing base configs: {e}")
+        raise
 
     if not ASTERISK_LINE1_SECRET:
         print("Asterisk: ASTERISK_LINE1_SECRET not set - skipping SIP/dialplan config generation")
