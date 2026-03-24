@@ -205,17 +205,24 @@ Returns JSON: `{"last_fetch_seconds_ago": 45, "ok": true}`
 
 ## Troubleshooting
 
-### TFTP "Permission denied"
+### TFTP transfers time out or fail
 
 If the phone can't pull its firmware or config, use tcpdump on the Docker host to
 check what the TFTP server is returning:
 
 ```bash
-tcpdump -ni any -vv -s0 -A udp and host <PHONE_IP> and port 69
+tcpdump -ni any -vv -s0 -A udp and host <PHONE_IP>
 ```
 
+The filter deliberately omits `port 69` because TFTP is a two-phase protocol:
+the client sends the initial request to port 69, but the server sends all data
+from a **random ephemeral port** (TID). Filtering only on port 69 would hide
+the data phase entirely.
+
 Look for lines containing `Permission denied` in the TFTP error response. If you
-see them, the in.tftpd process cannot read the files in `/data`.
+see them, the in.tftpd process cannot read the files in `/data` (see the
+permissions section below). If you see no reply at all after the initial RRQ,
+networking is the cause.
 
 **Quick test from any Linux machine on the LAN:**
 
@@ -225,6 +232,25 @@ tftp <SERVER_IP> -c get SIPDefault.cnf
 
 A successful transfer prints the file content. A failure prints
 `Transfer timed out` or `Error code 2: Access violation`.
+
+### TFTP networking (`network_mode: host`)
+
+The `tftp` service uses `network_mode: host` (no `ports:` mapping) for the same
+reason `asterisk` does: TFTP is a two-phase UDP protocol. The client sends the
+initial RRQ to port 69, but **all subsequent data packets come from a random
+ephemeral port** chosen by `in.tftpd` at transfer time.
+
+With Docker bridge networking only port 69 is published. The kernel would need
+the `nf_conntrack_tftp` connection-tracking module to associate the server's
+random data port with the original request, but this module is not available on
+all hosts (notably TrueNAS/FreeBSD). Without it, the data packets are silently
+dropped and every transfer times out.
+
+With `network_mode: host`, `in.tftpd` binds directly to the host's UDP port 69.
+No NAT is involved; both phases of the exchange reach the phone without
+requiring any special kernel modules.
+
+### TFTP "Permission denied"
 
 **Why this happens:** The host directory bound to `/data`
 (`/mnt/pool/Apps/Calico/Meow/tftp`) is typically created with mode `0770`

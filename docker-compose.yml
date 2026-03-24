@@ -3,9 +3,20 @@ services:
   # TFTP server — serves firmware and config files to the phone on boot
   tftp:
     image: palw3ey/ye3tftp
-    ports:
-      - 69:69/udp
+    network_mode: host
     restart: unless-stopped
+    # network_mode: host is required for TFTP to work reliably.
+    # TFTP is a two-phase UDP protocol: the client sends the initial RRQ to
+    # port 69, but the server replies from a *random* ephemeral port (TID).
+    # With Docker bridge networking only port 69 is published, so the server's
+    # random-port replies are NATed back through a connection that the kernel
+    # has no tracking entry for (this requires the nf_conntrack_tftp module,
+    # which is not present on all hosts — notably TrueNAS/FreeBSD). The result
+    # is that the initial request succeeds but every data packet is silently
+    # dropped, causing transfers to time out. With host networking in.tftpd
+    # binds directly to the host interface; no NAT is involved and both phases
+    # of the TFTP exchange reach the phone correctly.
+    #
     # The host-mounted /data volume is typically drwxrwx--- (0770), giving
     # "others" no access. in.tftpd drops privileges in --secure mode, so it
     # runs as an unprivileged user and gets "Permission denied" on the directory
