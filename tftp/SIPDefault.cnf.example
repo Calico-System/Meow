@@ -8,9 +8,14 @@ image_version: P0S3-8-12-00
 ; =====================
 proxy1_address: bridge-eu1.sipcord.net
 proxy_register: 1
-nat_enable: 1
-nat_address: your-duckdns-address.duckdns.org
-register_expires: 120
+; nat_enable controls whether the phone advertises its public IP in SIP
+; Contact and Via headers instead of its LAN IP.
+; Set to 0 (default) for LAN use — line 1 (Asterisk) always needs this.
+; Set to 1 only if SIPcord (line 2) fails to register or receive calls
+; from behind NAT, and also set nat_address to your public hostname/IP.
+nat_enable: 0
+; nat_address: your-duckdns-address.duckdns.org
+register_expires: 3600
 
 ; =====================
 ; Time & Clock (UK)
@@ -55,5 +60,9 @@ transfer_on_hangup: 0
 ; Audio
 ; =====================
 preferred_codec: g711ulaw
-dtmf_inband: 1
+; Use RTP events (AVT/RFC 2833) for DTMF only.
+; dtmf_inband must be 0 — leaving it 1 while dtmf_outofband is also set
+; causes the phone to send DTMF twice (in-band audio + RTP events), which
+; breaks IVR and voicemail on the remote end.
+dtmf_inband: 0
 dtmf_outofband: avt
