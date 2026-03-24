@@ -6,8 +6,15 @@ image_version: P0S3-8-12-00
 ; =====================
 ; SIP / Proxy
 ; =====================
-proxy1_address: bridge-eu1.sipcord.net
-proxy_register: 1
+; proxy1_address / proxy2_address are global fallbacks. When every line has
+; its own proxy configured via line1_proxy1_address / line2_proxy1_address
+; (etc.), these global fields are not needed and can cause confusion.
+; Uncomment only if you are NOT using per-line proxy settings.
+; proxy1_address: your-sip-provider.example.com
+; With per-line proxies, proxy_register is unnecessary and may trigger
+; unexpected registration behaviour. Leave commented unless you rely solely
+; on a global proxy rather than per-line proxy fields.
+; proxy_register: 1
 ; nat_enable controls whether the phone advertises its public IP in SIP
 ; Contact and Via headers instead of its LAN IP.
 ; Set to 0 (default) for LAN use — line 1 (Asterisk) always needs this.
