@@ -188,8 +188,18 @@ _XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>\n'
 def _sanitize_xml(s):
     return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+# Characters that are illegal in XML 1.0 (excluding the three whitespace chars
+# that ARE allowed: tab \x09, LF \x0A, CR \x0D).
+_XML_INVALID_CHARS_RE = re.compile(
+    r'[\x00-\x08\x0b\x0c\x0e-\x1f]'
+)
+
+def _strip_invalid_xml_chars(s):
+    """Remove characters that are not legal in XML 1.0 documents."""
+    return _XML_INVALID_CHARS_RE.sub('', str(s))
+
 def _to_phone_text(s):
-    return _sanitize_xml(s).replace("\n", "&#13;")
+    return _sanitize_xml(_strip_invalid_xml_chars(s)).replace("\n", "&#13;")
 
 STATUS_CACHE = {}
 PAGE_CACHE = {}
@@ -202,7 +212,7 @@ def get_status_data():
     return dict(STATUS_CACHE)
 
 def write_xml_refresh(filename, title, text, refresh_secs, refresh_url):
-    xml = f'''{_XML_DECL}<CiscoIPPhoneText Refresh="{refresh_secs}" URL="{refresh_url}">
+    xml = f'''{_XML_DECL}<CiscoIPPhoneText Refresh="{refresh_secs}" URL="{_sanitize_xml(refresh_url)}">
   <Title>{_sanitize_xml(title)}</Title>
   <Prompt>Updated: {datetime.now().strftime('%H:%M')}</Prompt>
   <Text>{_to_phone_text(text)}</Text>
@@ -212,7 +222,7 @@ def write_xml_refresh(filename, title, text, refresh_secs, refresh_url):
 
 def write_xml(filename, title, text):
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
-    xml = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{idle_url}">
+    xml = f"""{_XML_DECL}<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{_sanitize_xml(idle_url)}">
   <Title>{_sanitize_xml(title)}</Title>
   <Prompt>Updated: {datetime.now().strftime('%H:%M')}</Prompt>
   <Text>{_to_phone_text(text)}</Text>
@@ -682,25 +692,30 @@ def fetch_page2():
     news_text_full = "News: Unavailable"
     r = safe_get("https://feeds.bbci.co.uk/news/rss.xml")
     if r:
-        root = ET.fromstring(r.text)
-        items = root.findall(".//item")[:3]
-        headlines = ["--- BBC NEWS ---"]
-        headlines_full = ["--- BBC NEWS ---"]
-        for i, item in enumerate(items, 1):
-            title = item.find("title")
-            if title is not None:
-                t = phone_safe(title.text or "")
-                t_short = t if len(t) <= 29 else t[:26] + "..."
-                headlines.append(f"{i}. {t_short}")
-                headlines_full.append(f"{i}. {wrap_full(t)}")
-        if len(headlines) > 1:
-            news_text = "\n".join(headlines)
-            news_text_full = "\n".join(headlines_full)
-            first = headlines[1][3:]
-            STATUS_CACHE["news"] = f"BBC: {first.split(chr(10))[0]}"[:128]
-            save_status_data("headline", first.replace("\n", " "))
-        else:
-            news_text_full = news_text
+        try:
+            root = ET.fromstring(r.text)
+        except ET.ParseError as e:
+            print(f"ERROR: fetch_page2 - failed to parse BBC RSS feed: {e}")
+            root = None
+        if root is not None:
+            items = root.findall(".//item")[:3]
+            headlines = ["--- BBC NEWS ---"]
+            headlines_full = ["--- BBC NEWS ---"]
+            for i, item in enumerate(items, 1):
+                title = item.find("title")
+                if title is not None:
+                    t = phone_safe(title.text or "")
+                    t_short = t if len(t) <= 29 else t[:26] + "..."
+                    headlines.append(f"{i}. {t_short}")
+                    headlines_full.append(f"{i}. {wrap_full(t)}")
+            if len(headlines) > 1:
+                news_text = "\n".join(headlines)
+                news_text_full = "\n".join(headlines_full)
+                first = headlines[1][3:]
+                STATUS_CACHE["news"] = f"BBC: {first.split(chr(10))[0]}"[:128]
+                save_status_data("headline", first.replace("\n", " "))
+            else:
+                news_text_full = news_text
 
     write_xml("page2.xml", "BBC News", news_text)
     write_xml("page2_full.xml", "BBC News", news_text_full)
