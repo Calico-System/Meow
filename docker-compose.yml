@@ -34,7 +34,11 @@ services:
   # Meow — HTTP server, Discord bot, data fetcher
   # Writes Asterisk configs on startup before Asterisk reads them
   dashboard:
-    image: python:3.12-alpine
+    build:
+      # Build from bot/Dockerfile so Python dependencies are baked in and the
+      # startup bootstrap becomes a fast no-op.  Rebuild with:
+      #   docker compose build dashboard
+      context: /mnt/pool/Apps/Calico/Meow/bot
     restart: unless-stopped
     ports:
       # HTTP port served to the phone for XML pages
@@ -46,8 +50,6 @@ services:
       - /mnt/pool/Apps/Calico/Meow/http:/output
       # Shared volume for Asterisk config generation
       - /mnt/pool/Apps/Calico/Meow/asterisk:/etc/asterisk
-    working_dir: /app
-    command: python fetch.py
     env_file:
       # Copy .env.example to .env and fill in your values
       - /mnt/pool/Apps/Calico/Meow/.env
