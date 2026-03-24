@@ -2304,8 +2304,10 @@ def write_cycle_ring():
         next_filename = available_pages[(i + 1) % len(available_pages)]
         next_url = f"{base}/{next_filename}"
         xml = PAGE_CACHE[filename]
-        xml = re.sub(r'(<CiscoIPPhoneText[^>]*Refresh="[^"]*"\s+URL=")[^"]*(")',
-                     rf'\g<1>{next_url}\g<2>', xml)
+        # Replace the URL attribute on the root CiscoIPPhoneText element.
+        # count=1 is safe because our generated XML never has URL="..." in
+        # element content — only as the single attribute on the root tag.
+        xml = re.sub(r'URL="[^"]*"', f'URL="{next_url}"', xml, count=1)
         PAGE_CACHE[filename] = xml
 
     entry = available_pages[random.randrange(len(available_pages))]
