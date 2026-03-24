@@ -16,9 +16,14 @@ image_version: P0S3-8-12-00
 ; =====================
 proxy1_address: bridge-eu1.sipcord.net
 proxy_register: 1
-nat_enable: 1
-nat_address: your-duckdns-address.duckdns.org
-register_expires: 120
+; nat_enable controls whether the phone advertises its public IP in SIP
+; Contact and Via headers instead of its LAN IP.
+; Set to 0 (default) for LAN use — line 1 (Asterisk) always needs this.
+; Set to 1 only if SIPcord (line 2) fails to register or receive calls
+; from behind NAT, and also set nat_address to your public hostname/IP.
+nat_enable: 0
+; nat_address: your-duckdns-address.duckdns.org
+register_expires: 3600
 ; proxy1_port: 5060
 ; proxy2_address: your-backup-proxy.example.com
 ; proxy2_port: 5060
@@ -79,7 +84,11 @@ transfer_on_hangup: 0
 ; Audio
 ; =====================
 preferred_codec: g711ulaw
-dtmf_inband: 1
+; Use RTP events (AVT/RFC 2833) for DTMF only.
+; dtmf_inband must be 0 — leaving it 1 while dtmf_outofband is also set
+; causes the phone to send DTMF twice (in-band audio + RTP events), which
+; breaks IVR and voicemail on the remote end.
+dtmf_inband: 0
 dtmf_outofband: avt
 ; silence_suppression: 0
 
@@ -87,10 +96,11 @@ dtmf_outofband: avt
 ; Line 1 — Calico internal (Asterisk)
 ; =====================
 ; Line 1 registers to the local Asterisk container.
-; Set ASTERISK_LINE1_SECRET in .env and use the same password here.
+; Set ASTERISK_LINE1_SECRET in .env and replace CHANGEME_LINE1_PASSWORD
+; below with the same value.
 line1_name: 2001
 line1_authname: oak-line1
-line1_password: examplepassword
+line1_password: CHANGEME_LINE1_PASSWORD
 line1_displayname: Calico
 line1_proxy1_address: YOUR_SERVER_IP
 line1_proxy1_port: 5062
@@ -101,9 +111,11 @@ line1_proxy1_port: 5062
 ; Line 2 — SIPcord (external)
 ; =====================
 line2_name: 1001
-line2_authname: your-sipcord-username
-line2_password: your-sipcord-password
+line2_authname: CHANGEME_LINE2_AUTHNAME
+line2_password: CHANGEME_LINE2_PASSWORD
 line2_displayname: SIPcord
+; Line 2 falls back to the global proxy1_address (bridge-eu1.sipcord.net)
+; unless overridden here. Uncomment to be explicit or to use a different PoP.
 ; line2_proxy1_address: bridge-eu1.sipcord.net
 ; line2_proxy1_port: 5060
 ; line2_shortname: L2

@@ -200,3 +200,50 @@ http://YOUR_SERVER_IP:70/health
 ```
 
 Returns JSON: `{"last_fetch_seconds_ago": 45, "ok": true}`
+
+---
+
+## Troubleshooting
+
+### TFTP "Permission denied"
+
+If the phone can't pull its firmware or config, use tcpdump on the Docker host to
+check what the TFTP server is returning:
+
+```bash
+tcpdump -ni any -vv -s0 -A udp and host <PHONE_IP> and port 69
+```
+
+Look for lines containing `Permission denied` in the TFTP error response. If you
+see them, the in.tftpd process cannot read the files in `/data`.
+
+**Quick test from any Linux machine on the LAN:**
+
+```bash
+tftp <SERVER_IP> -c get SIPDefault.cnf
+```
+
+A successful transfer prints the file content. A failure prints
+`Transfer timed out` or `Error code 2: Access violation`.
+
+**Why this happens:** The host directory bound to `/data`
+(`/mnt/pool/Apps/Calico/Meow/tftp`) is typically created with mode `0770`
+(owner + group only). The `in.tftpd` process runs as root to bind UDP/69 but
+drops privileges to an unprivileged user for file access (`--secure` mode), and
+that user has no read or execute permission under `0770`.
+
+The compose file's `entrypoint` wrapper already handles this at container startup
+by running:
+
+```
+chmod 755 /data                          # directory: traversable by all
+chmod 644 /data/*.cnf /data/*.xml ...   # files: readable by all
+```
+
+**TrueNAS / ZFS note:** If you use a POSIX or NFSv4 ACL on the dataset, a bare
+`chmod` does not persist — the ACL overrides it on every access. To make the
+fix permanent at the host level, add `other::r-x` (read + execute) to the
+directory's ACL and `other::r--` to the files, or set the ZFS dataset's
+`aclinherit` and `aclmode` properties to `passthrough` and rely on the
+container's entrypoint to fix permissions at runtime (which it already does on
+every restart).

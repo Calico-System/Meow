@@ -6,17 +6,22 @@ services:
     ports:
       - 69:69/udp
     restart: unless-stopped
-    environment:
-      # The host-mounted /data volume is typically drwxrwx--- (0770), so
-      # in.tftpd (which drops privileges in --secure mode) gets "Permission denied"
-      # when it tries to traverse the directory or read files as an unprivileged user.
-      # Y_CHMOD=0755 makes /data itself world-executable so others can traverse it.
-      # Y_CHMOD_RECURSIVE=yes applies the same mode to every file and subdirectory
-      # inside /data, making them world-readable so in.tftpd can serve them.
-      # Note: this image applies one chmod value to both dirs and files; 0755 on
-      # plain config/firmware files is harmless — they are never executed via TFTP.
-      - Y_CHMOD=0755
-      - Y_CHMOD_RECURSIVE=yes
+    # The host-mounted /data volume is typically drwxrwx--- (0770), giving
+    # "others" no access. in.tftpd drops privileges in --secure mode, so it
+    # runs as an unprivileged user and gets "Permission denied" on the directory
+    # and any files that aren't world-readable.
+    #
+    # This entrypoint wrapper runs before in.tftpd:
+    #   chmod 755 /data        — makes the directory world-traversable
+    #   chmod 644 /data/*.*    — makes served files world-readable (best-effort;
+    #                            unmatched globs are suppressed and do not abort)
+    entrypoint:
+      - sh
+      - -c
+      - |
+        chmod 755 /data
+        chmod 644 /data/*.cnf /data/*.xml /data/*.txt /data/*.loads /data/*.dat /data/*.tlv 2>/dev/null || true
+        exec /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /data
     volumes:
       # Firmware, dialplan, and SIP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
