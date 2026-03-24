@@ -27,6 +27,8 @@ asterisk/extensions.conf
 asterisk/rtp.conf
 asterisk/manager.conf
 asterisk\manager.conf
+# Readiness marker written by fetch.py after config generation completes
+asterisk/.configs_written
 # asterisk/asterisk.conf and asterisk/modules.conf are safe to commit — no secrets
 
 # Python

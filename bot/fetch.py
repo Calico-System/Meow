@@ -2449,6 +2449,17 @@ if __name__ == "__main__":
 
     # Write Asterisk configs first so they're ready before Asterisk starts
     write_asterisk_configs()
+    # Signal to the Asterisk container (via healthcheck) that configs are ready.
+    # Written regardless of whether ASTERISK_LINE1_SECRET is set so the
+    # healthcheck never blocks indefinitely.
+    try:
+        os.makedirs(ASTERISK_CONFIG_DIR, exist_ok=True)
+        with open(os.path.join(ASTERISK_CONFIG_DIR, ".configs_written"), "w") as f:
+            f.write("ok")
+    except Exception as e:
+        print(f"Asterisk: could not write readiness marker: {e}")
+        print("Asterisk: healthcheck will fail; Asterisk container will not start. Check ASTERISK_CONFIG_DIR permissions.")
+        raise SystemExit(1)
 
     # Write idle.xml placeholder immediately so the phone never gets a 404
     # even if it polls before the first fetch cycle completes
