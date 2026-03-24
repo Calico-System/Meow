@@ -48,6 +48,7 @@ def bootstrap():
 
 bootstrap()
 
+import concurrent.futures
 import requests
 import random
 import re
@@ -171,6 +172,13 @@ for _i in range(1, 11):
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 SPEEDTEST_CACHE = os.path.join(OUTPUT_DIR, ".speedtest_cache.json")
 
+# ── Module-level XML helpers ────────────────────────────────────────────────
+def _sanitize_xml(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+def _to_phone_text(s):
+    return _sanitize_xml(s).replace("\n", "&#13;")
+
 STATUS_CACHE = {}
 PAGE_CACHE = {}
 INJECTION_QUEUE = deque()  # thread-safe queue for injection alerts from sync contexts
@@ -182,28 +190,20 @@ def get_status_data():
     return dict(STATUS_CACHE)
 
 def write_xml_refresh(filename, title, text, refresh_secs, refresh_url):
-    def sanitize(s):
-        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    def to_phone_text(s):
-        return sanitize(s).replace("\n", "&#13;")
     xml = f'''<CiscoIPPhoneText Refresh="{refresh_secs}" URL="{refresh_url}">
-  <Title>{sanitize(title)}</Title>
+  <Title>{_sanitize_xml(title)}</Title>
   <Prompt>Updated: {datetime.now().strftime('%H:%M')}</Prompt>
-  <Text>{to_phone_text(text)}</Text>
+  <Text>{_to_phone_text(text)}</Text>
 </CiscoIPPhoneText>'''
     PAGE_CACHE[filename] = xml
     print(f"Cached {filename} (memory, refresh={refresh_secs}s)")
 
 def write_xml(filename, title, text):
-    def sanitize(s):
-        return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    def to_phone_text(s):
-        return sanitize(s).replace("\n", "&#13;")
     idle_url = f"http://{SERVER_IP}:{HTTP_PORT}/idle.xml"
     xml = f"""<CiscoIPPhoneText Refresh="{IDLE_CYCLE_SECONDS}" URL="{idle_url}">
-  <Title>{sanitize(title)}</Title>
+  <Title>{_sanitize_xml(title)}</Title>
   <Prompt>Updated: {datetime.now().strftime('%H:%M')}</Prompt>
-  <Text>{to_phone_text(text)}</Text>
+  <Text>{_to_phone_text(text)}</Text>
 </CiscoIPPhoneText>"""
     PAGE_CACHE[filename] = xml
     print(f"Cached {filename} (memory)")
@@ -261,39 +261,61 @@ def looks_like_injection(text: str) -> bool:
     upper = text.upper()
     return any(p.upper() in upper for p in _INJECTION_PATTERNS)
 
+# Translation table built once at import time — faster than repeated str.replace() calls.
+_PHONE_SAFE_TABLE = str.maketrans({
+    ord('°'):      'deg',
+    ord('£'):      'GBP',
+    ord('€'):      'EUR',
+    ord('\u2018'): "'",    # left single quote
+    ord('\u2019'): "'",    # right single quote
+    ord('\u201c'): '"',    # left double quote
+    ord('\u201d'): '"',    # right double quote
+    ord('\u2013'): '-',    # en dash
+    ord('\u2014'): '-',    # em dash
+    ord('\u2026'): '...',  # ellipsis
+    ord('\u00b7'): '.',    # middle dot
+    ord('\u00d7'): 'x',    # multiply sign
+    ord('\u00f7'): '/',    # division sign
+    ord('\u00e9'): 'e',    # é
+    ord('\u00e8'): 'e',    # è
+    ord('\u00ea'): 'e',    # ê
+    ord('\u00e0'): 'a',    # à
+    ord('\u00e1'): 'a',    # á
+    ord('\u00e2'): 'a',    # â
+    ord('\u00fc'): 'u',    # ü
+    ord('\u00fa'): 'u',    # ú
+    ord('\u00fb'): 'u',    # û
+    ord('\u00f3'): 'o',    # ó
+    ord('\u00f2'): 'o',    # ò
+    ord('\u00f4'): 'o',    # ô
+    ord('\u00ed'): 'i',    # í
+    ord('\u00ec'): 'i',    # ì
+    ord('\u00f1'): 'n',    # ñ
+    ord('\u00e7'): 'c',    # ç
+})
+
 def phone_safe(text):
     """Replace characters the 7940G can't render with ASCII equivalents."""
-    replacements = {
-        '°': 'deg',
-        '£': 'GBP',
-        '€': 'EUR',
-        '\u2018': "'", '\u2019': "'",   # smart single quotes
-        '\u201c': '"', '\u201d': '"',   # smart double quotes
-        '\u2013': '-', '\u2014': '-',   # en dash, em dash
-        '\u2026': '...', '\u00b7': '.',  # ellipsis, middle dot
-        '\u00d7': 'x', '\u00f7': '/',   # multiply, divide
-        '\u00e9': 'e', '\u00e8': 'e', '\u00ea': 'e',  # accented e
-        '\u00e0': 'a', '\u00e1': 'a', '\u00e2': 'a',  # accented a
-        '\u00fc': 'u', '\u00fa': 'u', '\u00fb': 'u',  # accented u
-        '\u00f3': 'o', '\u00f2': 'o', '\u00f4': 'o',  # accented o
-        '\u00ed': 'i', '\u00ec': 'i',                  # accented i
-        '\u00f1': 'n',                                  # tilde n
-        '\u00e7': 'c',                                  # cedilla c
-    }
-    for char, replacement in replacements.items():
-        text = text.replace(char, replacement)
+    text = text.translate(_PHONE_SAFE_TABLE)
     # Strip anything still outside printable ASCII range
     return ''.join(c if 32 <= ord(c) < 127 or c == '\n' else '?' for c in text)
 
+def _fmt_size(b):
+    """Format a byte count as a human-readable size string."""
+    for unit, div in [("TB", 1_099_511_627_776), ("GB", 1_073_741_824), ("MB", 1_048_576)]:
+        if b >= div:
+            return f"{b/div:.1f}{unit}"
+    return f"{b}B"
+
 def ping(host):
     for port in [80, 443, 53]:
+        sock = None
         try:
-            start = time.time()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2)
+            start = time.time()
             ip = socket.gethostbyname(host)
             sock.connect((ip, port))
-            sock.close()
             ms = (time.time() - start) * 1000
             return f"{ms:.0f}ms"
         except socket.timeout:
@@ -303,6 +325,9 @@ def ping(host):
             return f"{ms:.0f}ms"
         except Exception:
             continue
+        finally:
+            if sock is not None:
+                sock.close()
     try:
         socket.gethostbyname(host)
         return "OK"
@@ -658,24 +683,30 @@ def fetch_page2():
 
 def fetch_page3():
     exchange_text = "Rates: Unavailable"
-    r = safe_get(f"https://api.exchangerate-api.com/v4/latest/{NEWS_BASE_CURRENCY}")
-    if r:
-        rates = r.json().get("rates", {})
-        eur = rates.get("EUR")
-        usd = rates.get("USD")
-        if isinstance(eur, (int, float)) and isinstance(usd, (int, float)):
-            currency_symbol = "GBP" if NEWS_BASE_CURRENCY == "GBP" else NEWS_BASE_CURRENCY
-            exchange_text = f"--- {NEWS_BASE_CURRENCY} RATES ---\n{currency_symbol}1 = EUR{eur:.4f}\n{currency_symbol}1 = USD{usd:.4f}"
-            STATUS_CACHE["exchange"] = f"{currency_symbol}1 = EUR{eur:.2f} | USD{usd:.2f}"
-            save_status_data("eur", eur)
-            save_status_data("usd", usd)
-        else:
-            exchange_text = "Rates: Bad data"
-
     grid_text = "Grid: Unavailable"
     grid_text_full = "Grid: Unavailable"
-    r = safe_get("https://api.carbonintensity.org.uk/intensity")
-    if r:
+
+    def fetch_exchange():
+        nonlocal exchange_text
+        r = safe_get(f"https://api.exchangerate-api.com/v4/latest/{NEWS_BASE_CURRENCY}")
+        if r:
+            rates = r.json().get("rates", {})
+            eur = rates.get("EUR")
+            usd = rates.get("USD")
+            if isinstance(eur, (int, float)) and isinstance(usd, (int, float)):
+                currency_symbol = "GBP" if NEWS_BASE_CURRENCY == "GBP" else NEWS_BASE_CURRENCY
+                exchange_text = f"--- {NEWS_BASE_CURRENCY} RATES ---\n{currency_symbol}1 = EUR{eur:.4f}\n{currency_symbol}1 = USD{usd:.4f}"
+                STATUS_CACHE["exchange"] = f"{currency_symbol}1 = EUR{eur:.2f} | USD{usd:.2f}"
+                save_status_data("eur", eur)
+                save_status_data("usd", usd)
+            else:
+                exchange_text = "Rates: Bad data"
+
+    def fetch_grid():
+        nonlocal grid_text, grid_text_full
+        r = safe_get("https://api.carbonintensity.org.uk/intensity")
+        if not r:
+            return
         d = r.json()["data"][0]["intensity"]
         actual = d.get("actual", "N/A")
         index = d.get("index", "N/A").title()
@@ -695,6 +726,8 @@ def fetch_page3():
         STATUS_CACHE["grid"] = f"Grid: {actual}g/kWh ({index})"
         save_status_data("grid_actual", actual)
         save_status_data("grid_index", index)
+
+    run_fetch_parallel(fetch_exchange, fetch_grid)
 
     write_xml("page3.xml", "Economy", f"{exchange_text}\n{grid_text}")
     write_xml("page3_full.xml", "Economy", f"{exchange_text}\n\n{grid_text_full}")
@@ -805,13 +838,46 @@ def fetch_page7():
     _service = False
 
     try:
+        indicator_map = {"none": "OK", "minor": "DEGRADED",
+                         "major": "MAJOR ISSUE", "critical": "DOWN"}
+
+        # Collect results from parallel tasks via shared containers.
+        ping_results = {}          # name -> latency string
+        claude_ping_result = [None]
+        claude_status_result = ["Unavailable"]
+        discord_svc_result = ["Unavailable"]
+
+        def do_ping_hosts():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(PING_HOSTS)) as ex:
+                futures = {ex.submit(ping, host): name for name, host in PING_HOSTS.items()}
+                for future in concurrent.futures.as_completed(futures):
+                    name = futures[future]
+                    ping_results[name] = future.result()
+
+        def do_claude_status():
+            claude_ping_result[0] = ping("api.anthropic.com")
+            r = safe_get("https://status.anthropic.com/api/v2/status.json")
+            if r:
+                indicator = r.json().get("status", {}).get("indicator", "none")
+                claude_status_result[0] = indicator_map.get(indicator, indicator)
+
+        def do_discord_status():
+            r = safe_get("https://discordstatus.com/api/v2/status.json")
+            if r:
+                indicator = r.json().get("status", {}).get("indicator", "none")
+                discord_svc_result[0] = indicator_map.get(indicator, indicator)
+
+        run_fetch_parallel(do_ping_hosts, do_claude_status, do_discord_status)
+
+        # Build ping lines in sorted order (matching the previous sequential order).
         ping_lines = ["--- PING ---"]
-        for name, host in sorted(PING_HOSTS.items()):
-            result = ping(host)
+        for name in sorted(ping_results):
+            result = ping_results[name]
             if result == "DOWN":
                 _network = True
                 _ping = True
             ping_lines.append(f"{name[:11]}: {result}")
+
         if discord_bot and not discord_bot.is_closed():
             dc_ms = round(discord_bot.latency * 1000)
             discord_latency = f"{dc_ms}ms"
@@ -820,6 +886,17 @@ def fetch_page7():
             _network = True
             _service = True
         ping_lines.append(f"Discord bot: {discord_latency}")
+
+        claude_ping = claude_ping_result[0] or "?"
+        claude_status = claude_status_result[0]
+        discord_svc_status = discord_svc_result[0]
+
+        if claude_status not in ("OK", "Unavailable"):
+            _network = True
+            _service = True
+        if discord_svc_status not in ("OK", "Unavailable"):
+            _network = True
+            _service = True
 
         cache = get_speedtest_result()
         speed_lines = ["--- SPEEDTEST ---"]
@@ -831,30 +908,6 @@ def fetch_page7():
         else:
             speed_lines.append("Running first test...")
             speed_lines.append("Check back in 2 mins")
-
-        indicator_map = {"none": "OK", "minor": "DEGRADED",
-                         "major": "MAJOR ISSUE", "critical": "DOWN"}
-
-        claude_status = "Unavailable"
-        claude_ping = ping("api.anthropic.com")
-        r = safe_get("https://status.anthropic.com/api/v2/status.json")
-        if r:
-            s = r.json().get("status", {})
-            indicator = s.get("indicator", "none")
-            claude_status = indicator_map.get(indicator, indicator)
-            if indicator != "none":
-                _network = True
-                _service = True
-
-        discord_svc_status = "Unavailable"
-        r = safe_get("https://discordstatus.com/api/v2/status.json")
-        if r:
-            s = r.json().get("status", {})
-            indicator = s.get("indicator", "none")
-            discord_svc_status = indicator_map.get(indicator, indicator)
-            if indicator != "none":
-                _network = True
-                _service = True
 
         claude_line = (
             f"Claude: {claude_ping}" if claude_status == "OK"
@@ -962,14 +1015,8 @@ def fetch_page9():
                         total = used + avail
                         pct = (used / total * 100) if total > 0 else 0
 
-                        def fmt_size(b):
-                            for unit, div in [("TB", 1_099_511_627_776), ("GB", 1_073_741_824), ("MB", 1_048_576)]:
-                                if b >= div:
-                                    return f"{b/div:.1f}{unit}"
-                            return f"{b}B"
-
                         nas_lines.append(f"{name}: {status}")
-                        nas_lines.append(f"{fmt_size(used)} / {fmt_size(total)}")
+                        nas_lines.append(f"{_fmt_size(used)} / {_fmt_size(total)}")
                         nas_lines.append(f"Used: {pct:.0f}%")
                 else:
                     nas_lines.append(f"{name}: {status}")
@@ -1068,20 +1115,27 @@ def _fetch_page10_impl():
             "injection": injection_attempt,
         }
 
-    # Fetch all channels in parallel
-    results = [None] * len(text_channels)
-    def fetch_and_store(i, channel):
-        results[i] = fetch_channel(channel)
+    # Fetch all channels in parallel using a thread pool
+    if not text_channels:
+        write_xml("page10.xml", "Discord", "No recent messages found")
+        write_xml("page10_full.xml", "Discord", "No recent messages found")
+        return
 
-    threads = []
-    for i, ch in enumerate(text_channels):
-        t = threading.Thread(target=fetch_and_store, args=(i, ch), daemon=True)
-        t.start()
-        threads.append(t)
-    for t in threads:
-        t.join(timeout=10)
-
-    all_results = [ch for ch in results if ch is not None]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(text_channels), 20)) as ex:
+        futures = [ex.submit(fetch_channel, ch) for ch in text_channels]
+        # as_completed(timeout=10) imposes a 10-second total wall-clock budget for
+        # collecting all results, not a per-future limit.  This is intentional:
+        # we want the whole parallel fetch to finish within 10 seconds so that a
+        # single slow channel cannot stall the page update.
+        completed = concurrent.futures.as_completed(futures, timeout=10)
+        all_results = []
+        try:
+            for f in completed:
+                result = f.result()
+                if result is not None:
+                    all_results.append(result)
+        except concurrent.futures.TimeoutError:
+            pass
 
     # Fire silent alerts for any injection attempts, exclude from phone display
     for ch in all_results:
@@ -2125,18 +2179,18 @@ def write_idle_cycle_immediate(page, hold_secs=None):
     PAGE_CACHE["idle.xml"] = content
     print(f"Cached idle.xml in memory (immediate switch to {page}, hold {secs}s)")
 
+def _naive(dt):
+    """Strip timezone info from a datetime so it can be compared with datetime.now()."""
+    return dt.replace(tzinfo=None) if (dt is not None and dt.tzinfo is not None) else dt
+
 def _get_active_pages():
     now = datetime.now()
     if DM_MESSAGE_PRIORITY:
-        dm_time = DM_MESSAGE_PRIORITY["time"]
-        if hasattr(dm_time, 'tzinfo') and dm_time.tzinfo is not None:
-            dm_time = dm_time.replace(tzinfo=None)
+        dm_time = _naive(DM_MESSAGE_PRIORITY["time"])
         if (now - dm_time).total_seconds() < MWI_DM_DURATION:
             return ["page12.xml"]
     if DM_RECEIVED_AT:
-        received_at = DM_RECEIVED_AT
-        if hasattr(received_at, 'tzinfo') and received_at.tzinfo is not None:
-            received_at = received_at.replace(tzinfo=None)
+        received_at = _naive(DM_RECEIVED_AT)
         if (now - received_at).total_seconds() < MWI_DM_DURATION:
             return ["page11.xml"]
     if NETWORK_ISSUE:
@@ -2146,15 +2200,11 @@ def _get_active_pages():
     if MC_HAS_PLAYERS:
         pages.append("page9.xml")
     if DM_MESSAGE_PRIORITY:
-        dm_time = DM_MESSAGE_PRIORITY["time"]
-        if hasattr(dm_time, 'tzinfo') and dm_time.tzinfo is not None:
-            dm_time = dm_time.replace(tzinfo=None)
+        dm_time = _naive(DM_MESSAGE_PRIORITY["time"])
         if (now - dm_time).total_seconds() >= MWI_DM_DURATION:
             pages.append("page12.xml")
     if DM_RECEIVED_AT:
-        received_at = DM_RECEIVED_AT
-        if hasattr(received_at, 'tzinfo') and received_at.tzinfo is not None:
-            received_at = received_at.replace(tzinfo=None)
+        received_at = _naive(DM_RECEIVED_AT)
         if (now - received_at).total_seconds() >= MWI_DM_DURATION:
             pages.append("page11.xml")
     return pages
