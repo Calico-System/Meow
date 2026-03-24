@@ -6,6 +6,10 @@ services:
     ports:
       - 69:69/udp
     restart: unless-stopped
+    environment:
+      # Ensure all files in /data are world-readable so in.tftpd can serve them
+      # without returning "Permission denied" when the host mounts the volume
+      - Y_CHMOD=0644
     volumes:
       # Firmware, dialplan, and SIP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
