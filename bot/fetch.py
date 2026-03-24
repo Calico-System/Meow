@@ -165,6 +165,16 @@ for _i in range(1, 11):
     if _name and _number and _secret:
         ASTERISK_EXTENSIONS.append((_name, _number, _secret, _display))
 
+# Additional Asterisk lines (line 2–10, e.g. softphones or other SIP devices)
+ASTERISK_LINES = []
+for _i in range(2, 11):
+    _name    = os.environ.get(f"ASTERISK_LINE{_i}_NAME", "")
+    _number  = os.environ.get(f"ASTERISK_LINE{_i}_NUMBER", "")
+    _secret  = os.environ.get(f"ASTERISK_LINE{_i}_SECRET", "")
+    _display = os.environ.get(f"ASTERISK_LINE{_i}_DISPLAYNAME", _name)
+    if _name and _number and _secret:
+        ASTERISK_LINES.append((_name, _number, _secret, _display))
+
 # ═══════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════
@@ -381,6 +391,10 @@ username={name}
 [{name}](aor_template)
 """
 
+        line_blocks = ""
+        for name, number, secret, display in ASTERISK_LINES:
+            line_blocks += pjsip_endpoint(name, number, secret, display)
+
         ext_blocks = ""
         for name, number, secret, display in ASTERISK_EXTENSIONS:
             ext_blocks += pjsip_endpoint(name, number, secret, display)
@@ -423,7 +437,7 @@ password={ASTERISK_LINE1_SECRET}
 username=oak-line1
 
 [oak-line1](aor_template)
-
+{line_blocks}
 ; ── Additional extensions ─────────────────────────────────────
 {ext_blocks}"""
         with open(os.path.join(ASTERISK_CONFIG_DIR, "pjsip.conf"), "w") as f:
