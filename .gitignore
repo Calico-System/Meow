@@ -26,6 +26,7 @@ asterisk/pjsip.conf
 asterisk/extensions.conf
 asterisk/rtp.conf
 asterisk/manager.conf
+asterisk\manager.conf
 # asterisk/asterisk.conf and asterisk/modules.conf are safe to commit — no secrets
 
 # Python
@@ -37,3 +38,4 @@ Thumbs.db
 
 # Personal docs
 *.docx
+asterisk/manager.conf
