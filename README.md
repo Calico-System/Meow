@@ -157,7 +157,8 @@ Meow/
 ├── http/
 │   └── logo.bmp
 ├── asterisk/
-│   └── entrypoint.sh             # Templates Asterisk configs from .env on startup
+│   ├── asterisk.conf             # Static Asterisk directory config (committed)
+│   └── modules.conf              # Static module load list (committed)
 ├── .github/
 │   └── assets/
 │       ├── meowlogo.png
