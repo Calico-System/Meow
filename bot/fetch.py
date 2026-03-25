@@ -842,9 +842,9 @@ def fetch_page2():
             root = ET.fromstring(r.text)
         except ET.ParseError as e:
             print(f"ERROR: fetch_page2 - failed to parse BBC RSS feed: {e}")
-            # Ensure presence/status does not continue to show a stale headline
-            STATUS_CACHE.pop("news", None)
-            save_status_data("headline", "News: Unavailable")
+            # Replace any stale headline so Discord presence shows "Unavailable"
+            # rather than cycling a cached-but-outdated BBC story.
+            STATUS_CACHE["news"] = "BBC: Unavailable"
             root = None
         if root is not None:
             items = root.findall(".//item")[:3]
