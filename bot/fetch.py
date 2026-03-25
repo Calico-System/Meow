@@ -1535,6 +1535,7 @@ def ami_event_loop(loop):
             backoff = min(backoff * 2, 60)
             continue
         backoff = 5
+        PHONE_REGISTERED = None  # reset until fresh ContactStatus events arrive
         buf = ""
         try:
             while True:
@@ -1589,6 +1590,7 @@ def ami_event_loop(loop):
             print(f"AMI event loop error: {e}")
         finally:
             AMI_CONNECTED = False
+            PHONE_REGISTERED = None  # stale state cleared; will re-qualify on reconnect
             try:
                 sock.close()
             except Exception:
