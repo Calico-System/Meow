@@ -599,6 +599,7 @@ auth_type=userpass
 type=aor
 max_contacts=1
 remove_existing=yes
+qualify_frequency=60
 
 ; ── Oak — Cisco 7940G line 1 ──────────────────────────────────
 [oak-line1](endpoint_template)
@@ -1443,6 +1444,7 @@ discord_bot = None
 
 ACTIVE_CALLS = {}        # channel -> {extension, start_time, callerid}
 AMI_CONNECTED = False
+PHONE_REGISTERED = None  # True = reachable, False = unreachable, None = unknown
 _ami_socket = None
 _ami_lock = threading.Lock()
 _ami_event_callbacks = []  # list of async coroutines to call on events
@@ -1524,7 +1526,7 @@ def _parse_ami_event(raw: str) -> dict:
 
 def ami_event_loop(loop):
     """Background thread: reads AMI events and fires callbacks."""
-    global AMI_CONNECTED
+    global AMI_CONNECTED, PHONE_REGISTERED
     backoff = 5
     while True:
         sock = ami_connect()
@@ -1557,6 +1559,15 @@ def ami_event_loop(loop):
                         }
                     elif ev in ("Hangup", "HangupRequest") and channel in ACTIVE_CALLS:
                         ACTIVE_CALLS.pop(channel, None)
+
+                    # Track phone registration state via qualify OPTIONS pings
+                    if ev == "ContactStatus":
+                        status = event.get("ContactStatus", "")
+                        if status == "Reachable":
+                            PHONE_REGISTERED = True
+                        elif status == "Unreachable":
+                            PHONE_REGISTERED = False
+                            print(f"AMI: phone contact unreachable — {event.get('URI', '?')}")
 
                     # Fire async callbacks (call events to Discord)
                     if ev in ("Dial", "Hangup", "Bridge"):
@@ -1912,6 +1923,10 @@ def start_discord_bot():
         embed.add_field(name="MC players", value="Yes" if MC_HAS_PLAYERS else "No", inline=True)
         last_fetch = f"{int(time.time() - LAST_FETCH_TIME)}s ago" if LAST_FETCH_TIME else "Never"
         embed.add_field(name="Last fetch", value=last_fetch, inline=True)
+        phone_reg = "✅ Reachable" if PHONE_REGISTERED is True else ("❌ Unreachable" if PHONE_REGISTERED is False else "Unknown (waiting for qualify)")
+        embed.add_field(name="Phone (line 1)", value=phone_reg, inline=True)
+        ami_status = "✅ Connected" if AMI_CONNECTED else "❌ Disconnected"
+        embed.add_field(name="Asterisk AMI", value=ami_status, inline=True)
         await interaction.response.send_message(embed=embed)
 
     @tree.command(name="birchhelp", description="Birch commands and DM usage")
@@ -2373,7 +2388,7 @@ def send_mwi(waiting: bool):
     body = f"Messages-Waiting: {state}\r\nVoice-Message: {msgs}\r\n"
     notify = (
         f"NOTIFY sip:{PHONE_SIP_EXTENSION}@{PHONE_IP}:{PHONE_SIP_PORT} SIP/2.0\r\n"
-        f"Via: SIP/2.0/UDP {SERVER_IP}:5060;branch=z9hG4bK{call_id[:8]}\r\n"
+        f"Via: SIP/2.0/UDP {SERVER_IP}:{ASTERISK_SIP_PORT};branch=z9hG4bK{call_id[:8]}\r\n"
         f"From: <sip:dashboard@{SERVER_IP}>;tag={call_id[:8]}\r\n"
         f"To: <sip:{PHONE_SIP_EXTENSION}@{PHONE_IP}>\r\n"
         f"Call-ID: {call_id}\r\n"
