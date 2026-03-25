@@ -230,7 +230,8 @@ networking is the cause.
 tftp <SERVER_IP> -c get SIPDefault.cnf
 ```
 
-A successful transfer prints the file content. A failure prints
+A successful transfer saves the file to the current directory. Check the exit
+status and then inspect the file (e.g. `cat SIPDefault.cnf`). A failure prints
 `Transfer timed out` or `Error code 2: Access violation`.
 
 ### TFTP networking (`network_mode: host`)
@@ -262,8 +263,8 @@ The compose file's `entrypoint` wrapper already handles this at container startu
 by running:
 
 ```
-chmod 755 /data     # directory: traversable by all
-chmod 644 /data/*   # all files: readable by all (covers firmware + config)
+chmod 711 /data                              # directory: world-traversable (not world-listable)
+find /data -maxdepth 1 -type f -exec chmod 644 {} +   # regular files: readable by all
 ```
 
 **TrueNAS / ZFS note:** If you use a POSIX or NFSv4 ACL on the dataset, a bare
