@@ -121,10 +121,10 @@ line2_name: 1001
 line2_authname: CHANGEME_LINE2_AUTHNAME
 line2_password: CHANGEME_LINE2_PASSWORD
 line2_displayname: SIPcord
-; Set line2_proxy1_address to the SIP proxy for this line (e.g. your external
-; SIP provider). Using a per-line proxy here is preferred over a global
-; proxy1_address so that each line can reach a different server.
-line2_proxy1_address: your-sip-provider.example.com
+; Set line2_proxy1_address to the SIP proxy for your SIPcord account.
+; The default SIPcord bridge is bridge-eu1.sipcord.net — check your SIPcord
+; account settings for the correct regional bridge address.
+line2_proxy1_address: bridge-eu1.sipcord.net
 line2_proxy1_port: 5060
 ; line2_shortname: L2
 ; line2_ring_setting: 1
