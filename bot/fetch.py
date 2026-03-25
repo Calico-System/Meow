@@ -1562,13 +1562,25 @@ def ami_event_loop(loop):
 
                     # Track phone registration state via qualify OPTIONS pings
                     if ev == "ContactStatus":
-                        status = event.get("ContactStatus", "")
-                        if status == "Reachable":
-                            PHONE_REGISTERED = True
-                        elif status == "Unreachable":
-                            PHONE_REGISTERED = False
-                            print(f"AMI: phone contact unreachable — {event.get('URI', '?')}")
+                        # Only treat ContactStatus for the primary AOR/endpoint as
+                        # indicative of the "Phone (line 1)" registration state.
+                        primary_aor = os.environ.get("ASTERISK_PRIMARY_AOR", "oak-line1")
+                        event_aor = (
+                            event.get("AOR")
+                            or event.get("EndpointName")
+                            or event.get("ObjectName")
+                            or ""
+                        )
+                        uri = event.get("URI", "") or ""
+                        is_primary = event_aor == primary_aor or primary_aor in uri
 
+                        if is_primary:
+                            status = event.get("ContactStatus", "")
+                            if status == "Reachable":
+                                PHONE_REGISTERED = True
+                            elif status == "Unreachable":
+                                PHONE_REGISTERED = False
+                                print(f"AMI: phone contact unreachable — {uri or '?'}")
                     # Fire async callbacks (call events to Discord)
                     if ev in ("Dial", "Hangup", "Bridge"):
                         for cb in _ami_event_callbacks:
