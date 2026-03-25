@@ -2400,7 +2400,7 @@ def send_mwi(waiting: bool):
     body = f"Messages-Waiting: {state}\r\nVoice-Message: {msgs}\r\n"
     notify = (
         f"NOTIFY sip:{PHONE_SIP_EXTENSION}@{PHONE_IP}:{PHONE_SIP_PORT} SIP/2.0\r\n"
-        f"Via: SIP/2.0/UDP {SERVER_IP}:{ASTERISK_SIP_PORT};branch=z9hG4bK{call_id[:8]}\r\n"
+        f"Via: SIP/2.0/UDP {SERVER_IP}:{ASTERISK_SIP_PORT};rport;branch=z9hG4bK{call_id[:8]}\r\n"
         f"From: <sip:dashboard@{SERVER_IP}>;tag={call_id[:8]}\r\n"
         f"To: <sip:{PHONE_SIP_EXTENSION}@{PHONE_IP}>\r\n"
         f"Call-ID: {call_id}\r\n"
