@@ -23,32 +23,37 @@ services:
     # and any files that aren't world-readable.
     #
     # This entrypoint wrapper runs before in.tftpd:
-    #   chmod 755 /data   — makes the directory world-traversable
-    #   chmod 644 /data/* — makes all served files world-readable (best-effort;
-    #                        unmatched globs are suppressed and do not abort)
-    #
-    # Using a wildcard instead of listing specific extensions ensures that
-    # firmware files (.sbn, .bin, .sb2, .tar, …) are covered alongside
-    # config files (.cnf, .xml, .txt, …). Without this, in.tftpd's
-    # unprivileged user gets "Access violation" on any unlisted extension.
+    #   chmod 711 /data   — makes the directory world-traversable (but not
+    #                        world-listable, so other local users can't enumerate
+    #                        the files containing SIP credentials)
+    #   find /data -maxdepth 1 -type f -exec chmod 644 {} + — makes regular
+    #                        files world-readable; using find instead of a glob
+    #                        ensures subdirectories keep their execute bit and
+    #                        real chmod errors are surfaced rather than silenced
     #
     # in.tftpd is run in the background (not via exec) and kept alive with
     # "wait". Running it as PID 1 via "exec" means any binding failure (e.g.
     # the OS still holding port 69 from a previous container restart) would
     # immediately kill the container. Running in background lets the script
     # emit log lines that TrueNAS's log viewer can display, and "wait" keeps
-    # the container alive while propagating signals correctly.
+    # the container alive while forwarding termination signals correctly.
     entrypoint:
       - sh
       - -c
       - |
-        chmod 755 /data
-        chmod 644 /data/* 2>/dev/null || true
+        chmod 711 /data
+        find /data -maxdepth 1 -type f -exec chmod 644 {} +
         echo "Starting in.tftpd on 0.0.0.0:69"
         /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /data &
         TFTPD_PID=$!
-        echo "in.tftpd running (PID ${TFTPD_PID})"
+        echo "in.tftpd started (PID ${TFTPD_PID})"
+        trap 'echo "Forwarding termination signal to in.tftpd (${TFTPD_PID})"; kill -TERM "${TFTPD_PID}" 2>/dev/null; wait "${TFTPD_PID}"; exit $?' TERM INT
         wait ${TFTPD_PID}
+        EXIT_STATUS=$?
+        if [ "${EXIT_STATUS}" -ne 0 ]; then
+          echo "in.tftpd exited with status ${EXIT_STATUS}"
+        fi
+        exit "${EXIT_STATUS}"
     volumes:
       # Firmware, dialplan, and SIP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
@@ -80,7 +85,8 @@ services:
     # Host networking is required so that the bot can reach Asterisk's AMI
     # socket on 127.0.0.1:5038 (Asterisk also runs with network_mode: host).
     # With bridge networking the container's 127.0.0.1 is its own loopback,
-    # not the host's, so ami_connect() would silently fail every time.
+    # not the host's, so ami_connect() would fail every time by connecting to
+    # the container instead of the host Asterisk instance.
     # The HTTP server (port 70) remains reachable from the LAN because it
     # binds to 0.0.0.0 directly on the host — no ports: mapping is needed.
     network_mode: host
