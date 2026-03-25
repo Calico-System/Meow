@@ -5,38 +5,10 @@ services:
     image: palw3ey/ye3tftp
     network_mode: host
     restart: unless-stopped
-    # network_mode: host is required for TFTP to work reliably.
-    # TFTP is a two-phase UDP protocol: the client sends the initial RRQ to
-    # port 69, but the server replies from a *random* ephemeral port (TID).
-    # With Docker bridge networking only port 69 is published, so the server's
-    # random-port replies are NATed back through a connection that the kernel
-    # has no tracking entry for (this requires the nf_conntrack_tftp module,
-    # which is not present on all hosts — notably TrueNAS/FreeBSD). The result
-    # is that the initial request succeeds but every data packet is silently
-    # dropped, causing transfers to time out. With host networking in.tftpd
-    # binds directly to the host interface; no NAT is involved and both phases
-    # of the TFTP exchange reach the phone correctly.
-    #
-    # The host-mounted /data volume is typically drwxrwx--- (0770), giving
-    # "others" no access. in.tftpd drops privileges in --secure mode, so it
-    # runs as an unprivileged user and gets "Permission denied" on the directory
-    # and any files that aren't world-readable.
-    #
-    # This entrypoint wrapper runs before in.tftpd:
-    #   chmod 711 /data   — makes the directory world-traversable (but not
-    #                        world-listable, so other local users can't enumerate
-    #                        the files containing SIP credentials)
-    #   find /data -maxdepth 1 -type f -exec chmod 644 {} + — makes regular
-    #                        files world-readable; using find instead of a glob
-    #                        ensures subdirectories keep their execute bit and
-    #                        real chmod errors are surfaced rather than silenced
-    #
-    # in.tftpd is run in the background (not via exec) and kept alive with
-    # "wait". Running it as PID 1 via "exec" means any binding failure (e.g.
-    # the OS still holding port 69 from a previous container restart) would
-    # immediately kill the container. Running in background lets the script
-    # emit log lines that TrueNAS's log viewer can display, and "wait" keeps
-    # the container alive while forwarding termination signals correctly.
+    # network_mode: host is required: TFTP uses ephemeral reply ports that
+    # bridge NAT can't track without nf_conntrack_tftp (absent on TrueNAS).
+    # The entrypoint fixes /data permissions before starting in.tftpd so
+    # it can read files as an unprivileged user in --secure mode.
     entrypoint:
       - sh
       - -c
@@ -82,13 +54,8 @@ services:
   # Writes Asterisk configs on startup before Asterisk reads them
   dashboard:
     image: python:3.12-alpine
-    # Host networking is required so that the bot can reach Asterisk's AMI
-    # socket on 127.0.0.1:5038 (Asterisk also runs with network_mode: host).
-    # With bridge networking the container's 127.0.0.1 is its own loopback,
-    # not the host's, so ami_connect() would fail every time by connecting to
-    # the container instead of the host Asterisk instance.
-    # The HTTP server (port 70) remains reachable from the LAN because it
-    # binds to 0.0.0.0 directly on the host — no ports: mapping is needed.
+    # network_mode: host is required: the bot must reach Asterisk's AMI on
+    # 127.0.0.1:5038, and the HTTP server binds 0.0.0.0:70 directly on the host.
     network_mode: host
     restart: unless-stopped
     volumes:

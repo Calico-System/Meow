@@ -555,14 +555,14 @@ noload => app_getcpeid.so
 ; {display} ({number})
 [{name}](endpoint_template)
 auth={name}
-aors={name}
+aors={number}
 callerid="{display}" <{number}>
 
 [{name}](auth_template)
 password={secret}
 username={name}
 
-[{name}](aor_template)
+[{number}](aor_template)
 """
 
         line_blocks = ""
@@ -590,6 +590,7 @@ allow=alaw
 direct_media=no
 force_rport=yes
 ice_support=no
+identify_by=auth_username
 
 [auth_template](!)
 type=auth
@@ -604,14 +605,14 @@ qualify_frequency=60
 ; ── Oak — Cisco 7940G line 1 ──────────────────────────────────
 [oak-line1](endpoint_template)
 auth=oak-line1
-aors=oak-line1
+aors={ASTERISK_LINE1_NUMBER}
 callerid="{ASTERISK_LINE1_DISPLAYNAME}" <{ASTERISK_LINE1_NUMBER}>
 
 [oak-line1](auth_template)
 password={ASTERISK_LINE1_SECRET}
 username=oak-line1
 
-[oak-line1](aor_template)
+[{ASTERISK_LINE1_NUMBER}](aor_template)
 {line_blocks}
 ; ── Additional extensions ─────────────────────────────────────
 {ext_blocks}"""
@@ -1565,7 +1566,7 @@ def ami_event_loop(loop):
                     if ev == "ContactStatus":
                         # Only treat ContactStatus for the primary AOR/endpoint as
                         # indicative of the "Phone (line 1)" registration state.
-                        primary_aor = os.environ.get("ASTERISK_PRIMARY_AOR", "oak-line1")
+                        primary_aor = os.environ.get("ASTERISK_PRIMARY_AOR", ASTERISK_LINE1_NUMBER)
                         event_aor = (
                             event.get("AOR")
                             or event.get("EndpointName")
