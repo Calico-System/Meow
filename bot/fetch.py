@@ -1372,11 +1372,12 @@ def _fetch_page10_impl():
         except concurrent.futures.TimeoutError:
             pass
     finally:
-        # Cancel any futures that have not yet started and shut down without
-        # waiting, so we respect the 10-second budget.
+        # Cancel any futures that have not yet started and shut down the
+        # executor, waiting for any in-flight tasks to complete so we don't
+        # leak background threads across repeated invocations.
         for f in futures:
             f.cancel()
-        ex.shutdown(wait=False)
+        ex.shutdown(wait=True, cancel_futures=True)
 
     # Fire silent alerts for any injection attempts, exclude from phone display
     for ch in all_results:
