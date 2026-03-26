@@ -97,18 +97,6 @@
     </service>
   </services>
 
-  <!-- ===================== -->
-  <!-- Locale (UK)            -->
-  <!-- ===================== -->
-  <userLocale>
-    <name>English_United_Kingdom</name>
-    <uid>4</uid>
-  </userLocale>
-  <networkLocale>United_Kingdom</networkLocale>
-  <networkLocaleInfo>
-    <name>United_Kingdom</name>
-    <uid>4</uid>
-  </networkLocaleInfo>
 
   <!-- ===================== -->
   <!-- Miscellaneous          -->
