@@ -27,7 +27,7 @@ services:
         fi
         exit "${EXIT_STATUS}"
     volumes:
-      # Firmware, dialplan, and SIP config files
+      # Firmware, dialplan, and SCCP config files
       - /mnt/pool/Apps/Calico/Meow/tftp:/data
 
   # Asterisk — internal PBX for Oak's line 1 and Calico component communication

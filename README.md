@@ -39,9 +39,9 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 - A [SIPcord](https://sipcord.net) account (line 2)
 - Docker + Docker Compose on a machine accessible from the phone's LAN
 - A Discord bot token ([create one here](https://discord.com/developers))
-- The Cisco SIP firmware files for `P0S3-8-12-00` (not included - source these yourself)
+- The Cisco SCCP firmware files for `P0030801SR02` (not included - source these yourself)
 
-Line 1 on the phone registers to a local Asterisk container included in the compose file — no external account needed. Line 2 is SIPcord.
+Line 1 on the phone registers to a local Asterisk container included in the compose file via SCCP — no external account needed. Line 2 routes through Asterisk to SIPcord via a PJSIP trunk.
 
 ---
 
@@ -66,13 +66,15 @@ Fill in all values. See `.env.example` for descriptions of each variable.
 ### 3. Configure TFTP files
 
 ```bash
-cp tftp/SIPDefault.cnf.example tftp/SIPDefault.cnf
-cp tftp/SIP_YOURMAC_.cnf.example tftp/SIP001122334455.cnf
-nano tftp/SIPDefault.cnf
-nano tftp/SIP001122334455.cnf
+cp tftp/XMLDefault.cnf.xml.example tftp/XMLDefault.cnf.xml
+cp tftp/SEP_YOURMAC_.cnf.xml.example tftp/SEP001D45ABCDEF.cnf.xml
+nano tftp/XMLDefault.cnf.xml
+nano tftp/SEP001D45ABCDEF.cnf.xml
 ```
 
-Place firmware files (`.sb2`, `.bin`, `.sbn`, `.loads`, `.tar`) in the `tftp/` directory - these are not included in the repo.
+Replace `001D45ABCDEF` with your phone's MAC address (uppercase, no colons — printed on the underside label).
+
+Place firmware files (`P0030801SR02.loads`, `P0030801SR02.sb2`, etc.) in the `tftp/` directory — these are not included in the repo.
 
 The phone directory is configured via `DIRECTORY_ENTRY_*` variables in `.env` and served automatically — no static file needed.
 
@@ -84,7 +86,7 @@ docker compose up -d
 
 ### 5. Point the phone at the TFTP server
 
-On the phone: **Settings → Network Configuration → TFTP Server** → enter your server's IP. The phone will reboot, pull its firmware and config, and register on both lines — line 1 to the local Asterisk container, line 2 to SIPcord.
+On the phone: **Settings → Network Configuration → TFTP Server** → enter your server's IP. The phone will reboot, pull its firmware and config, and register on both lines via SCCP — line 1 to the local Asterisk container, line 2 routed through Asterisk to SIPcord.
 
 ---
 
@@ -106,8 +108,14 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 | `PRIORITY_LABEL` | priority users | Label for priority users in bot messages |
 | `DIRECTORY_ENTRY_1_NAME` | - | Phone directory entry name (up to 10 entries) |
 | `DIRECTORY_ENTRY_1_NUMBER` | - | Phone directory entry extension number |
+| `PHONE_MAC` | - | Phone MAC address (no colons) — used to build SCCP device ID in skinny.conf |
+| `ASTERISK_SCCP_PORT` | 2000 | SCCP port Asterisk listens on (must match TFTP config) |
 | `ASTERISK_AMI_SECRET` | - | Asterisk Manager Interface password |
 | `ASTERISK_AMI_CALL_CHANNEL_ID` | - | Discord channel ID for call event notifications |
+| `SIPCORD_USERNAME` | - | SIPcord account username (leave blank to disable trunk) |
+| `SIPCORD_PASSWORD` | - | SIPcord account password |
+| `SIPCORD_PROXY` | bridge-eu1.sipcord.net | SIPcord SIP proxy address |
+| `SIPCORD_LINE_NUMBER` | 1001 | Extension number used for the SIPcord line |
 
 ---
 
@@ -148,17 +156,17 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 ```
 Meow/
 ├── bot/
-│   └── fetch.py                  # Main script
+│   └── fetch.py                       # Main script
 ├── tftp/
 │   ├── OS79XX.TXT
 │   ├── dialplan.xml
-│   ├── SIPDefault.cnf.example
-│   └── SIP_YOURMAC_.cnf.example
+│   ├── XMLDefault.cnf.xml.example
+│   └── SEP_YOURMAC_.cnf.xml.example
 ├── http/
 │   └── logo.bmp
 ├── asterisk/
-│   ├── asterisk.conf             # Static Asterisk directory config (committed)
-│   └── modules.conf              # Static module load list (committed)
+│   ├── asterisk.conf                  # Static Asterisk directory config (committed)
+│   └── modules.conf                   # Static module load list (committed)
 ├── .github/
 │   └── assets/
 │       ├── meowlogo.png
@@ -186,10 +194,10 @@ If an attempt is detected the owner receives a DM alert with the user's name, ID
 |------|----------|---------|---------|
 | 69 | UDP | TFTP | Serves firmware and config files to the phone on boot |
 | 70 | TCP | HTTP | Serves XML pages, directory, logo and health check to the phone |
-| 5060 | UDP | SIPcord | External SIP — handled by the phone directly, not the server |
-| 5062 | UDP/TCP | Asterisk | Internal SIP — Oak line 1, Calico component registration |
+| 2000 | TCP | Asterisk SCCP | SCCP/Skinny — both phone lines register here |
+| 5060 | UDP | Asterisk PJSIP | SIPcord trunk — Asterisk registers to SIPcord on behalf of line 2 |
 | 5038 | TCP | Asterisk AMI | Manager Interface — used internally by fetch.py only, not exposed externally |
-| 10000–10020 | UDP | Asterisk RTP | Audio media streams for internal calls (supports up to 10 simultaneous) |
+| 10000–10020 | UDP | Asterisk RTP | Audio media streams for calls (supports up to 10 simultaneous) |
 
 ---
 
@@ -227,11 +235,11 @@ networking is the cause.
 **Quick test from any Linux machine on the LAN:**
 
 ```bash
-tftp <SERVER_IP> -c get SIPDefault.cnf
+tftp <SERVER_IP> -c get XMLDefault.cnf.xml
 ```
 
 A successful transfer saves the file to the current directory. Check the exit
-status and then inspect the file (e.g. `cat SIPDefault.cnf`). A failure prints
+status and then inspect the file (e.g. `cat XMLDefault.cnf.xml`). A failure prints
 `Transfer timed out` or `Error code 2: Access violation`.
 
 ### TFTP networking (`network_mode: host`)
