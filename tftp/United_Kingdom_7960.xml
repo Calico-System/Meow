@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Network locale tones file for the Cisco 7960G — United Kingdom          -->
+<!-- Served over TFTP when <networkLocale>United_Kingdom</networkLocale> is   -->
+<!-- set in SEP<MAC>.cnf.xml / XMLDefault.cnf.xml.                           -->
+<!-- Tone frequencies and cadences follow BT SIN 351 / Ofcom specifications. -->
+<tones>
+
+  <!-- Dial Tone: 350 Hz + 440 Hz, continuous -->
+  <tone name="DialTone">
+    <freq1 level="-13">350</freq1>
+    <freq2 level="-13">440</freq2>
+    <on1>0</on1>
+    <off1>0</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Secondary Dial Tone: same as Dial Tone -->
+  <tone name="SecondDialTone">
+    <freq1 level="-13">350</freq1>
+    <freq2 level="-13">440</freq2>
+    <on1>0</on1>
+    <off1>0</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Message Waiting Indicator Dial Tone: interrupted dial tone -->
+  <tone name="MWIDialTone">
+    <freq1 level="-13">350</freq1>
+    <freq2 level="-13">440</freq2>
+    <on1>100</on1>
+    <off1>100</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Busy (Engaged) Tone: 400 Hz, 375 ms on / 375 ms off -->
+  <tone name="BusyTone">
+    <freq1 level="-19">400</freq1>
+    <on1>375</on1>
+    <off1>375</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Audible Ring (Ring-Back) Tone: 400+450 Hz, 400/200/400/2000 ms -->
+  <tone name="AlertTone">
+    <freq1 level="-19">400</freq1>
+    <freq2 level="-19">450</freq2>
+    <on1>400</on1>
+    <off1>200</off1>
+    <on2>400</on2>
+    <off2>2000</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Reorder / Congestion Tone: 400 Hz, 400 ms on / 350 ms off -->
+  <tone name="ReorderTone">
+    <freq1 level="-19">400</freq1>
+    <on1>400</on1>
+    <off1>350</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Call Waiting Tone: 400 Hz, 100 ms on / 2000 ms off -->
+  <tone name="CallWaitingTone">
+    <freq1 level="-13">400</freq1>
+    <on1>100</on1>
+    <off1>2000</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+  <!-- Off-Hook Warning (Howler): 400+1400+2060+2450+2600 Hz, 100/100 ms -->
+  <tone name="OffHookAlarmTone">
+    <freq1 level="-10">400</freq1>
+    <freq2 level="-10">1400</freq2>
+    <on1>100</on1>
+    <off1>100</off1>
+    <on2>0</on2>
+    <off2>0</off2>
+    <timeout>0</timeout>
+  </tone>
+
+</tones>
