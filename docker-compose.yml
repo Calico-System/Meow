@@ -14,7 +14,8 @@ services:
       - -c
       - |
         chmod 711 /data
-        find /data -maxdepth 1 -type f -exec chmod 644 {} +
+        find /data -mindepth 1 -type d -exec chmod 711 {} +
+        find /data -type f -exec chmod 644 {} +
         echo "Starting in.tftpd on 0.0.0.0:69"
         /usr/sbin/in.tftpd --foreground --secure --address 0.0.0.0:69 /data &
         TFTPD_PID=$!
