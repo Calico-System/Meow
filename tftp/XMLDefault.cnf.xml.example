@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Default SCCP config — applies to all phones that don't have a SEP<MAC>.cnf.xml -->
+<!-- Rename this to XMLDefault.cnf.xml and place it in the tftp/ directory.         -->
+<default>
+  <deviceProtocol>SCCP</deviceProtocol>
+  <sshUserId>cisco</sshUserId>
+  <sshPassword>cisco</sshPassword>
+
+  <!-- ===================== -->
+  <!-- Call Manager           -->
+  <!-- ===================== -->
+  <callManagerGroup>
+    <members>
+      <member priority="0">
+        <callManager>
+          <ports>
+            <!-- Default SCCP port -->
+            <ethernetPhonePort>2000</ethernetPhonePort>
+          </ports>
+          <!-- IP of the machine running the Docker containers -->
+          <processNodeName>YOUR_SERVER_IP</processNodeName>
+        </callManager>
+      </member>
+    </members>
+  </callManagerGroup>
+
+  <!-- ===================== -->
+  <!-- Firmware               -->
+  <!-- ===================== -->
+  <loadInformation>P0030801SR02</loadInformation>
+
+  <!-- ===================== -->
+  <!-- Locale (UK)            -->
+  <!-- ===================== -->
+  <userLocale>
+    <name>English_United_Kingdom</name>
+    <uid>4</uid>
+  </userLocale>
+  <networkLocale>United_Kingdom</networkLocale>
+  <networkLocaleInfo>
+    <name>United_Kingdom</name>
+    <uid>4</uid>
+  </networkLocaleInfo>
+
+  <!-- ===================== -->
+  <!-- Miscellaneous          -->
+  <!-- ===================== -->
+  <idleTimeout>300</idleTimeout>
+  <authenticationMode>AuthenticateByCertificate</authenticationMode>
+  <unitOfLength>Metric</unitOfLength>
+  <pcPort>Enabled</pcPort>
+  <settingsAccess>Enabled</settingsAccess>
+  <garp>Enabled</garp>
+  <voiceVlanAccess>Enabled</voiceVlanAccess>
+  <videoCapability>Disabled</videoCapability>
+  <autoSelectLineEnable>Disabled</autoSelectLineEnable>
+  <ipAddressMode>IPv4 Only</ipAddressMode>
+</default>

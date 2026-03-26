@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Per-device SCCP config for the Cisco 7940G / 7960G.                            -->
+<!-- Rename to SEP + your phone's MAC address (uppercase, no colons) + .cnf.xml     -->
+<!-- Example: SEP001D45ABCDEF.cnf.xml                                               -->
+<!-- MAC address is printed on the label on the underside of the phone.             -->
+<!-- Settings here override XMLDefault.cnf.xml.                                     -->
+<device>
+  <deviceProtocol>SCCP</deviceProtocol>
+  <sshUserId>cisco</sshUserId>
+  <sshPassword>cisco</sshPassword>
+
+  <!-- ===================== -->
+  <!-- Phone identity         -->
+  <!-- ===================== -->
+  <phoneInformation>
+    <!-- Replace with SEP + your phone's MAC address (uppercase, no colons) -->
+    <name>SEP001D45ABCDEF</name>
+    <load>P0030801SR02</load>
+  </phoneInformation>
+
+  <!-- ===================== -->
+  <!-- Call Manager           -->
+  <!-- ===================== -->
+  <callManagerGroup>
+    <members>
+      <member priority="0">
+        <callManager>
+          <ports>
+            <!-- Default SCCP port — must match ASTERISK_SCCP_PORT in .env -->
+            <ethernetPhonePort>2000</ethernetPhonePort>
+          </ports>
+          <!-- IP of the machine running the Docker containers -->
+          <processNodeName>YOUR_SERVER_IP</processNodeName>
+        </callManager>
+      </member>
+    </members>
+  </callManagerGroup>
+
+  <!-- ===================== -->
+  <!-- Firmware               -->
+  <!-- ===================== -->
+  <loadInformation>P0030801SR02</loadInformation>
+
+  <!-- ===================== -->
+  <!-- Lines                  -->
+  <!-- ===================== -->
+  <lines>
+    <!-- Line 1 — Calico internal (Asterisk via SCCP) -->
+    <line button="1">
+      <index>1</index>
+      <!-- Must match ASTERISK_LINE1_NUMBER in .env -->
+      <name>2001</name>
+      <label>Calico</label>
+      <shortname>L1</shortname>
+      <displayName>Calico</displayName>
+      <autoAnswer>
+        <autoAnswerEnabled>false</autoAnswerEnabled>
+      </autoAnswer>
+      <callWaiting>Auto</callWaiting>
+      <messageWaitingLampPolicy>1</messageWaitingLampPolicy>
+    </line>
+
+    <!-- Line 2 — SIPcord (external, routed through Asterisk) -->
+    <!-- Must match SIPCORD_LINE_NUMBER in .env               -->
+    <line button="2">
+      <index>2</index>
+      <name>1001</name>
+      <label>SIPcord</label>
+      <shortname>L2</shortname>
+      <displayName>SIPcord</displayName>
+      <autoAnswer>
+        <autoAnswerEnabled>false</autoAnswerEnabled>
+      </autoAnswer>
+      <callWaiting>Auto</callWaiting>
+    </line>
+
+    <!-- Lines 3–6 (7960G only) -->
+    <!--
+    <line button="3">
+      <index>3</index>
+      <name>CHANGEME</name>
+      <label>Line 3</label>
+      <shortname>L3</shortname>
+      <displayName>Line 3</displayName>
+    </line>
+    -->
+  </lines>
+
+  <!-- ===================== -->
+  <!-- Services URL           -->
+  <!-- ===================== -->
+  <services>
+    <service>
+      <siuURL>http://YOUR_SERVER_IP:70/services.xml</siuURL>
+      <name>Meow</name>
+      <type>7</type>
+    </service>
+  </services>
+
+  <!-- ===================== -->
+  <!-- Locale (UK)            -->
+  <!-- ===================== -->
+  <userLocale>
+    <name>English_United_Kingdom</name>
+    <uid>4</uid>
+  </userLocale>
+  <networkLocale>United_Kingdom</networkLocale>
+  <networkLocaleInfo>
+    <name>United_Kingdom</name>
+    <uid>4</uid>
+  </networkLocaleInfo>
+
+  <!-- ===================== -->
+  <!-- Miscellaneous          -->
+  <!-- ===================== -->
+  <idleTimeout>300</idleTimeout>
+  <authenticationMode>AuthenticateByCertificate</authenticationMode>
+  <unitOfLength>Metric</unitOfLength>
+  <pcPort>Enabled</pcPort>
+  <settingsAccess>Enabled</settingsAccess>
+  <garp>Enabled</garp>
+  <voiceVlanAccess>Enabled</voiceVlanAccess>
+  <videoCapability>Disabled</videoCapability>
+  <autoSelectLineEnable>Disabled</autoSelectLineEnable>
+  <ipAddressMode>IPv4 Only</ipAddressMode>
+
+  <!-- ===================== -->
+  <!-- Display                -->
+  <!-- ===================== -->
+  <phoneLabel>YourLabel</phoneLabel>
+</device>
