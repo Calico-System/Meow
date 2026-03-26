@@ -79,7 +79,7 @@
     <timeout>0</timeout>
   </tone>
 
-  <!-- Off-Hook Warning (Howler): 400+1400+2060+2450+2600 Hz, 100/100 ms -->
+  <!-- Off-Hook Warning (Howler): 400+1400 Hz, 100/100 ms -->
   <tone name="OffHookAlarmTone">
     <freq1 level="-10">400</freq1>
     <freq2 level="-10">1400</freq2>
