@@ -191,7 +191,7 @@ If an attempt is detected the owner receives a DM alert with the user's name, ID
 | 69 | UDP | TFTP | Serves firmware and config files to the phone on boot |
 | 70 | TCP | HTTP | Serves XML pages, directory, logo and health check to the phone |
 | 80 | TCP | FreePBX HTTP | FreePBX web UI for PBX configuration |
-| 5038 | TCP | Asterisk AMI | Manager Interface — used internally by fetch.py only, not exposed externally |
+| 5038 | TCP | Asterisk AMI | Manager Interface — used internally by fetch.py; should be bound to localhost or otherwise restricted (e.g. firewall / AMI permit/deny) |
 | 5060 | UDP | Asterisk SIP/PJSIP | Phone registration and trunk signalling |
 | 10000–20000 | UDP | Asterisk RTP | Audio media streams for calls |
 
