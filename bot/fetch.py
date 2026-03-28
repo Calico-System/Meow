@@ -852,6 +852,7 @@ def get_speedtest_result():
 # ═══════════════════════════════════════════════════════
 
 def fetch_page1():
+    print("Fetching page1: weather...")
     weather_text = "Weather: Unavailable"
     weather_text_full = "Weather: Unavailable"
     r = safe_get(
@@ -921,6 +922,9 @@ def fetch_page1():
             f"Sunrise: {sunrise_str}  Set:{sunset_str}",
         ]
         weather_text_full = phone_safe("\n".join(lines))
+        print(f"fetch_page1: weather OK ({desc}, {temp}degC)")
+    else:
+        print("fetch_page1: weather unavailable")
 
     write_xml("page1.xml", "Weather", weather_text)
     write_xml("page1_full.xml", "Weather", weather_text_full)
@@ -970,6 +974,7 @@ def fetch_page2():
 # ═══════════════════════════════════════════════════════
 
 def fetch_page3():
+    print("Fetching page3: economy...")
     exchange_text = "Rates: Unavailable"
     grid_text = "Grid: Unavailable"
     grid_text_full = "Grid: Unavailable"
@@ -999,13 +1004,16 @@ def fetch_page3():
                 STATUS_CACHE["exchange"] = f"{NEWS_BASE_CURRENCY}1 = {status_str}"
                 for cur, rate in rate_pairs:
                     save_status_data(cur.lower(), rate)
+                print(f"fetch_page3: exchange rates OK ({STATUS_CACHE['exchange']})")
             else:
                 exchange_text = "Rates: Bad data"
+                print("fetch_page3: exchange rates bad data")
 
     def fetch_grid():
         nonlocal grid_text, grid_text_full
         r = safe_get("https://api.carbonintensity.org.uk/intensity")
         if not r:
+            print("fetch_page3: grid unavailable")
             return
         d = r.json()["data"][0]["intensity"]
         actual = d.get("actual", "N/A")
@@ -1026,6 +1034,7 @@ def fetch_page3():
         STATUS_CACHE["grid"] = f"Grid: {actual}g/kWh ({index})"
         save_status_data("grid_actual", actual)
         save_status_data("grid_index", index)
+        print(f"fetch_page3: grid OK ({actual}g/kWh, {index})")
 
     run_fetch_parallel(fetch_exchange, fetch_grid)
 
@@ -1037,6 +1046,7 @@ def fetch_page3():
 # ═══════════════════════════════════════════════════════
 
 def fetch_page4():
+    print("Fetching page4: space...")
     space_text = "Space: Unavailable"
     space_text_full = "Space: Unavailable"
     r = safe_get("https://fdo.rocketlaunch.live/json/launches/next/1")
@@ -1057,9 +1067,13 @@ def fetch_page4():
             STATUS_CACHE["rocket"] = f"Next launch: {name} on {date_str}"[:128]
             save_status_data("launch_name", name)
             save_status_data("launch_date", date_str[:16])
+            print(f"fetch_page4: space OK ({name}, {date_str})")
         else:
             space_text = "--- SPACE ---\nNo upcoming\nlaunches found"
             space_text_full = space_text
+            print("fetch_page4: no upcoming launches found")
+    else:
+        print("fetch_page4: space unavailable")
 
     write_xml("page4.xml", "Space", space_text)
     write_xml("page4_full.xml", "Space", space_text_full)
@@ -1069,6 +1083,7 @@ def fetch_page4():
 # ═══════════════════════════════════════════════════════
 
 def fetch_page5():
+    print("Fetching page5: history...")
     history_text = "History: Unavailable"
     history_text_full = "History: Unavailable"
     today = datetime.now()
@@ -1092,6 +1107,11 @@ def fetch_page5():
             history_text_full = f"--- THIS DAY ---\n{today.strftime('%d %B')} {year}\n{text_wrapped_full}"
             STATUS_CACHE["history"] = f"{today.strftime('%d %b')} {year}: {first_line}"[:128]
             save_status_data("history", f"{today.strftime('%d %b')} {year}: {text_raw.replace(chr(10), ' ')}")
+            print(f"fetch_page5: history OK ({today.strftime('%d %b')} {year})")
+        else:
+            print("fetch_page5: no history events found")
+    else:
+        print("fetch_page5: history unavailable")
 
     write_xml("page5.xml", "History", history_text)
     write_xml("page5_full.xml", "History", history_text_full)
@@ -1101,6 +1121,7 @@ def fetch_page5():
 # ═══════════════════════════════════════════════════════
 
 def fetch_page6():
+    print("Fetching page6: fun...")
     cat_text = "Cat Fact: Unavailable"
     cat_text_full = "Cat Fact: Unavailable"
     r = safe_get("https://catfact.ninja/fact")
@@ -1112,6 +1133,9 @@ def fetch_page6():
         cat_text_full = f"--- CAT FACT ---\n{wrap_full(fact)}"
         STATUS_CACHE["catfact"] = f"Cat fact: {fact_wrapped.split(chr(10))[0]}"[:128]
         save_status_data("cat_fact", fact.replace("\n", " "))
+        print(f"fetch_page6: cat fact OK")
+    else:
+        print("fetch_page6: cat fact unavailable")
 
     responses = [
         "It is certain", "It is decidedly so",
@@ -1262,6 +1286,7 @@ _MC_LEGACY_PING_REQUEST  = b'\xfe\x01'
 _MC_LEGACY_PING_RESPONSE = 0xff
 
 def fetch_page9():
+    print("Fetching page9: servers...")
     global MC_HAS_PLAYERS
     mc_lines = [f"--- {MINECRAFT_SERVER_NAME.upper()} ---"]
     sock2 = None
@@ -1300,22 +1325,28 @@ def fetch_page9():
                     STATUS_CACHE["minecraft"] = f"{MINECRAFT_SERVER_NAME}: {online}/{max_p} online"
                     save_status_data("mc_online", online)
                     save_status_data("mc_max", max_p)
+                    print(f"fetch_page9: Minecraft online ({online}/{max_p} players)")
                 else:
                     MC_HAS_PLAYERS = False
                     mc_lines.append("Online")
                     mc_lines.append("Players: 0/?")
+                    print("fetch_page9: Minecraft online (player count unknown)")
             except Exception as e:
                 mc_lines.append("Online")
                 mc_lines.append(f"Parse error: {str(e)[:15]}")
+                print(f"fetch_page9: Minecraft parse error: {e}")
         else:
             mc_lines.append("Online")
             mc_lines.append("Players: ?/?")
+            print("fetch_page9: Minecraft online (no ping data)")
     except ConnectionRefusedError:
         MC_HAS_PLAYERS = False
         mc_lines.append("Offline")
+        print(f"fetch_page9: Minecraft offline (connection refused)")
     except Exception as e:
         MC_HAS_PLAYERS = False
         mc_lines.append(f"Error: {str(e)[:20]}")
+        print(f"fetch_page9: Minecraft error: {e}")
     finally:
         if sock2 is not None:
             try:
@@ -1326,6 +1357,7 @@ def fetch_page9():
     nas_lines = ["--- TRUENAS ---"]
     if not TRUENAS_KEY:
         nas_lines.append("Not configured")
+        print("fetch_page9: TrueNAS not configured")
     else:
         try:
             headers = {"Authorization": f"Bearer {TRUENAS_KEY}"}
@@ -1354,12 +1386,16 @@ def fetch_page9():
                             nas_lines.append(f"{name}: {status}")
                             nas_lines.append(f"{_fmt_size(used)} / {_fmt_size(total)}")
                             nas_lines.append(f"Used: {pct:.0f}%")
+                            print(f"fetch_page9: TrueNAS pool '{name}' OK ({status}, {pct:.0f}% used)")
                     else:
                         nas_lines.append(f"{name}: {status}")
+                        print(f"fetch_page9: TrueNAS pool '{name}' dataset fetch error {r2.status_code}")
             else:
                 nas_lines.append(f"API error {r.status_code}")
+                print(f"fetch_page9: TrueNAS API error {r.status_code}")
         except Exception as e:
             nas_lines.append(f"Error: {str(e)[:20]}")
+            print(f"fetch_page9: TrueNAS error: {e}")
 
     text = "\n".join(mc_lines) + "\n" + "\n".join(nas_lines)
     text_full = "\n".join(mc_lines) + "\n\n" + "\n".join(nas_lines)
@@ -1382,6 +1418,7 @@ def fetch_page10():
         _fetch_page10_lock.release()
 
 def _fetch_page10_impl():
+    print("Fetching page10: Discord messages...")
     headers = {
         "Authorization": f"Bot {DISCORD_TOKEN}",
         "Content-Type": "application/json"
@@ -1392,12 +1429,14 @@ def _fetch_page10_impl():
         headers=headers
     )
     if not r:
+        print("fetch_page10: Discord channels unavailable")
         write_xml("page10.xml", "Discord", "Discord: Unavailable")
         write_xml("page10_full.xml", "Discord", "Discord: Unavailable")
         return
 
     channels = r.json()
     text_channels = [c for c in channels if c.get("type") == 0]
+    print(f"fetch_page10: got {len(text_channels)} text channel(s)")
 
     def fetch_channel(channel):
         cid = channel["id"]
@@ -1453,6 +1492,7 @@ def _fetch_page10_impl():
 
     # Fetch all channels in parallel using a thread pool
     if not text_channels:
+        print("fetch_page10: no text channels found")
         write_xml("page10.xml", "Discord", "No recent messages found")
         write_xml("page10_full.xml", "Discord", "No recent messages found")
         return
@@ -1472,6 +1512,7 @@ def _fetch_page10_impl():
                 if result is not None:
                     all_results.append(result)
         except concurrent.futures.TimeoutError:
+            print("fetch_page10: channel fetch timed out — using partial results")
             pass
     finally:
         # Cancel any futures that have not yet started and shut down the
@@ -1492,6 +1533,7 @@ def _fetch_page10_impl():
                 "content": ch["content"],
             })
     channel_data = [ch for ch in all_results if not ch.get("injection")]
+    print(f"fetch_page10: fetched {len(channel_data)} message(s) ({len(all_results) - len(channel_data)} injection(s) filtered)")
 
     if not channel_data:
         write_xml("page10.xml", "Discord", "No recent messages found")
@@ -2342,6 +2384,7 @@ def start_discord_bot():
 # ═══════════════════════════════════════════════════════
 
 def fetch_page11():
+    print("Fetching page11: DM...")
     if DM_MESSAGE:
         author = phone_safe(DM_MESSAGE["author"])
         text = phone_safe(DM_MESSAGE["text"])
@@ -2357,6 +2400,7 @@ def fetch_page11():
     write_xml_refresh("page11_full.xml", "DM", body_full, MWI_DM_DURATION, idle_url)
 
 def fetch_page12():
+    print("Fetching page12: priority DM...")
     if DM_MESSAGE_PRIORITY:
         author = phone_safe(DM_MESSAGE_PRIORITY["author"])
         text = phone_safe(DM_MESSAGE_PRIORITY["text"])
