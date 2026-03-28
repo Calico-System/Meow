@@ -1357,7 +1357,7 @@ def fetch_page9():
     nas_lines = ["--- TRUENAS ---"]
     if not TRUENAS_KEY:
         nas_lines.append("Not configured")
-        print("fetch_page9: TrueNAS not configured (no API key)")
+        print("fetch_page9: TrueNAS not configured")
     else:
         try:
             headers = {"Authorization": f"Bearer {TRUENAS_KEY}"}
