@@ -102,13 +102,14 @@ PRIORITY_LABEL   = os.environ.get("PRIORITY_LABEL", "priority users")
 _REQUIRED_ENV = {
     "DISCORD_TOKEN": DISCORD_TOKEN,
     "DISCORD_GUILD_ID": DISCORD_GUILD_ID,
-    "TRUENAS_KEY": TRUENAS_KEY,
     "OWNER_USER_IDS": os.environ.get("OWNER_USER_IDS", ""),
     "PRIORITY_USER_IDS": os.environ.get("PRIORITY_USER_IDS", ""),
 }
 for _var, _val in _REQUIRED_ENV.items():
     if not _val:
         print(f"WARNING: {_var} is not set - related features will not work")
+if not TRUENAS_KEY:
+    print("INFO: TRUENAS_KEY is not set - TrueNAS pool display on page 9 will be skipped")
 
 IDLE_CYCLE_SECONDS = int(os.environ.get("IDLE_CYCLE_SECONDS", "30"))
 SPEEDTEST_INTERVAL = int(os.environ.get("SPEEDTEST_INTERVAL", "3600"))
@@ -980,21 +981,24 @@ def fetch_page3():
         # capped at 1500 free requests/month (our 5-min cycle uses ~8 600/month).
         # Exclude the base currency itself from the symbols list; frankfurter
         # returns an error if the base appears in the target set.
-        symbols = ",".join(s for s in ["EUR", "USD"] if s != NEWS_BASE_CURRENCY)
+        # GBP is included so that EUR- and USD-denominated bases both get two
+        # target currencies (e.g. base=EUR → symbols=USD,GBP).
+        target = [s for s in ["EUR", "USD", "GBP"] if s != NEWS_BASE_CURRENCY][:2]  # always two rates
+        symbols = ",".join(target)
         r = safe_get(
             "https://api.frankfurter.app/latest",
             params={"base": NEWS_BASE_CURRENCY, "symbols": symbols},
         )
         if r:
             rates = r.json().get("rates", {})
-            eur = rates.get("EUR")
-            usd = rates.get("USD")
-            if isinstance(eur, (int, float)) and isinstance(usd, (int, float)):
-                currency_symbol = "GBP" if NEWS_BASE_CURRENCY == "GBP" else NEWS_BASE_CURRENCY
-                exchange_text = f"--- {NEWS_BASE_CURRENCY} RATES ---\n{currency_symbol}1 = EUR{eur:.4f}\n{currency_symbol}1 = USD{usd:.4f}"
-                STATUS_CACHE["exchange"] = f"{currency_symbol}1 = EUR{eur:.2f} | USD{usd:.2f}"
-                save_status_data("eur", eur)
-                save_status_data("usd", usd)
+            rate_pairs = [(cur, rates[cur]) for cur in target if isinstance(rates.get(cur), (int, float))]
+            if rate_pairs:
+                lines = "\n".join(f"{NEWS_BASE_CURRENCY}1 = {cur}{rate:.4f}" for cur, rate in rate_pairs)
+                exchange_text = f"--- {NEWS_BASE_CURRENCY} RATES ---\n{lines}"
+                status_str = " | ".join(f"{cur}{rate:.2f}" for cur, rate in rate_pairs)
+                STATUS_CACHE["exchange"] = f"{NEWS_BASE_CURRENCY}1 = {status_str}"
+                for cur, rate in rate_pairs:
+                    save_status_data(cur.lower(), rate)
             else:
                 exchange_text = "Rates: Bad data"
 
@@ -1320,39 +1324,42 @@ def fetch_page9():
                 pass
 
     nas_lines = ["--- TRUENAS ---"]
-    try:
-        headers = {"Authorization": f"Bearer {TRUENAS_KEY}"}
-        r = requests.get(
-            f"https://{TRUENAS_IP}/api/v2.0/pool",
-            headers=headers, timeout=5, verify=False
-        )
-        if r.status_code == 200:
-            pools = r.json()
-            for pool in pools:
-                name = pool.get("name", "unknown")
-                status = pool.get("status", "unknown")
-                r2 = requests.get(
-                    f"https://{TRUENAS_IP}/api/v2.0/pool/dataset",
-                    headers=headers, timeout=5, verify=False,
-                    params={"name": name}
-                )
-                if r2.status_code == 200:
-                    datasets = r2.json()
-                    if datasets:
-                        used = datasets[0].get("used", {}).get("parsed", 0)
-                        avail = datasets[0].get("available", {}).get("parsed", 0)
-                        total = used + avail
-                        pct = (used / total * 100) if total > 0 else 0
+    if not TRUENAS_KEY:
+        nas_lines.append("Not configured")
+    else:
+        try:
+            headers = {"Authorization": f"Bearer {TRUENAS_KEY}"}
+            r = requests.get(
+                f"https://{TRUENAS_IP}/api/v2.0/pool",
+                headers=headers, timeout=5, verify=False
+            )
+            if r.status_code == 200:
+                pools = r.json()
+                for pool in pools:
+                    name = pool.get("name", "unknown")
+                    status = pool.get("status", "unknown")
+                    r2 = requests.get(
+                        f"https://{TRUENAS_IP}/api/v2.0/pool/dataset",
+                        headers=headers, timeout=5, verify=False,
+                        params={"name": name}
+                    )
+                    if r2.status_code == 200:
+                        datasets = r2.json()
+                        if datasets:
+                            used = datasets[0].get("used", {}).get("parsed", 0)
+                            avail = datasets[0].get("available", {}).get("parsed", 0)
+                            total = used + avail
+                            pct = (used / total * 100) if total > 0 else 0
 
+                            nas_lines.append(f"{name}: {status}")
+                            nas_lines.append(f"{_fmt_size(used)} / {_fmt_size(total)}")
+                            nas_lines.append(f"Used: {pct:.0f}%")
+                    else:
                         nas_lines.append(f"{name}: {status}")
-                        nas_lines.append(f"{_fmt_size(used)} / {_fmt_size(total)}")
-                        nas_lines.append(f"Used: {pct:.0f}%")
-                else:
-                    nas_lines.append(f"{name}: {status}")
-        else:
-            nas_lines.append(f"API error {r.status_code}")
-    except Exception as e:
-        nas_lines.append(f"Error: {str(e)[:20]}")
+            else:
+                nas_lines.append(f"API error {r.status_code}")
+        except Exception as e:
+            nas_lines.append(f"Error: {str(e)[:20]}")
 
     text = "\n".join(mc_lines) + "\n" + "\n".join(nas_lines)
     text_full = "\n".join(mc_lines) + "\n\n" + "\n".join(nas_lines)
