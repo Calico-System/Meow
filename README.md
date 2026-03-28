@@ -241,7 +241,7 @@ status and then inspect the file (e.g. `cat XMLDefault.cnf.xml`). A failure prin
 ### TFTP networking (`network_mode: host`)
 
 The `tftp` service uses `network_mode: host` (no `ports:` mapping) for the same
-reason `asterisk` does: TFTP is a two-phase UDP protocol. The client sends the
+reason `freepbx` does: TFTP is a two-phase UDP protocol. The client sends the
 initial RRQ to port 69, but **all subsequent data packets come from a random
 ephemeral port** chosen by `in.tftpd` at transfer time.
 
