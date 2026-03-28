@@ -26,7 +26,7 @@
       <member priority="0">
         <callManager>
           <ports>
-            <!-- Default SCCP port — must match ASTERISK_SCCP_PORT in .env -->
+            <!-- SCCP port — must match the port configured in FreePBX / chan_sccp-b -->
             <ethernetPhonePort>2000</ethernetPhonePort>
           </ports>
           <!-- IP of the machine running the Docker containers -->
@@ -45,11 +45,12 @@
   <!-- Lines                  -->
   <!-- ===================== -->
   <lines>
-    <!-- Line 1 — Calico internal (Asterisk via SCCP) -->
+    <!-- Line 1 — registered to FreePBX via SCCP -->
     <line button="1">
       <index>1</index>
-      <!-- Must match ASTERISK_LINE1_NUMBER in .env -->
-      <name>2001</name>
+      <!-- Must match the extension number configured in FreePBX (FREEPBX_EXTENSION in .env) -->
+      <!-- Replace 200 with your actual FreePBX extension number -->
+      <name>200</name>
       <label>Calico</label>
       <shortname>L1</shortname>
       <displayName>Calico</displayName>
@@ -60,19 +61,20 @@
       <messageWaitingLampPolicy>1</messageWaitingLampPolicy>
     </line>
 
-    <!-- Line 2 — SIPcord (external, routed through Asterisk) -->
-    <!-- Must match SIPCORD_LINE_NUMBER in .env               -->
+    <!-- Line 2 — additional extension (optional, configure in FreePBX) -->
+    <!--
     <line button="2">
       <index>2</index>
-      <name>1001</name>
-      <label>SIPcord</label>
+      <name>201</name>
+      <label>Line 2</label>
       <shortname>L2</shortname>
-      <displayName>SIPcord</displayName>
+      <displayName>Line 2</displayName>
       <autoAnswer>
         <autoAnswerEnabled>false</autoAnswerEnabled>
       </autoAnswer>
       <callWaiting>Auto</callWaiting>
     </line>
+    -->
 
     <!-- Lines 3–6 (7960G only) -->
     <!--

@@ -36,12 +36,11 @@ DMs sent to the bot appear on the phone screen for 5 minutes and light the red M
 ## Requirements
 
 - Cisco 7940G (tested) or 7960G
-- A [SIPcord](https://sipcord.net) account (line 2)
 - Docker + Docker Compose on a machine accessible from the phone's LAN
 - A Discord bot token ([create one here](https://discord.com/developers))
 - The Cisco SCCP firmware files for `P0030801SR02` (not included - source these yourself)
 
-Line 1 on the phone registers to a local Asterisk container included in the compose file via SCCP — no external account needed. Line 2 routes through Asterisk to SIPcord via a PJSIP trunk.
+The phone registers to a local FreePBX container included in the compose file. Extensions, trunks, and call routing are configured through the FreePBX web UI — no config files need to be written manually.
 
 ---
 
@@ -84,9 +83,11 @@ The phone directory is configured via `DIRECTORY_ENTRY_*` variables in `.env` an
 docker compose up -d
 ```
 
+FreePBX will initialise its database on first boot — this can take a minute or two. Access the web UI at `http://YOUR_SERVER_IP:80` to complete PBX setup (extensions, trunks, routes). AMI credentials are configured in FreePBX under **Admin → Asterisk Manager Users**.
+
 ### 5. Point the phone at the TFTP server
 
-On the phone: **Settings → Network Configuration → TFTP Server** → enter your server's IP. The phone will reboot, pull its firmware and config, and register on both lines via SCCP — line 1 to the local Asterisk container, line 2 routed through Asterisk to SIPcord.
+On the phone: **Settings → Network Configuration → TFTP Server** → enter your server's IP. The phone will reboot, pull its firmware and config, and register to FreePBX.
 
 ---
 
@@ -108,14 +109,12 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 | `PRIORITY_LABEL` | priority users | Label for priority users in bot messages |
 | `DIRECTORY_ENTRY_1_NAME` | - | Phone directory entry name (up to 10 entries) |
 | `DIRECTORY_ENTRY_1_NUMBER` | - | Phone directory entry extension number |
-| `PHONE_MAC` | - | Phone MAC address (no colons) — used to build SCCP device ID in skinny.conf |
-| `ASTERISK_SCCP_PORT` | 2000 | SCCP port Asterisk listens on (must match TFTP config) |
-| `ASTERISK_AMI_SECRET` | - | Asterisk Manager Interface password |
+| `FREEPBX_EXTENSION` | - | Phone extension number in FreePBX — used for MWI mailbox and originate caller ID |
+| `ASTERISK_ORIGINATE_CHANNEL` | - | AMI originate channel (e.g. `PJSIP/200`) — required for `/meowcall` and priority DM ring |
+| `ASTERISK_ORIGINATE_CONTEXT` | from-internal | Dialplan context for AMI originate |
+| `ASTERISK_AMI_USER` | - | FreePBX AMI username (set in FreePBX: Admin → Asterisk Manager Users) |
+| `ASTERISK_AMI_SECRET` | - | FreePBX AMI password |
 | `ASTERISK_AMI_CALL_CHANNEL_ID` | - | Discord channel ID for call event notifications |
-| `SIPCORD_USERNAME` | - | SIPcord account username (leave blank to disable trunk) |
-| `SIPCORD_PASSWORD` | - | SIPcord account password |
-| `SIPCORD_PROXY` | bridge-eu1.sipcord.net | SIPcord SIP proxy address |
-| `SIPCORD_LINE_NUMBER` | 1001 | Extension number used for the SIPcord line |
 
 ---
 
@@ -164,9 +163,6 @@ Meow/
 │   └── SEP_YOURMAC_.cnf.xml.example
 ├── http/
 │   └── logo.bmp
-├── asterisk/
-│   ├── asterisk.conf                  # Static Asterisk directory config (committed)
-│   └── modules.conf                   # Static module load list (committed)
 ├── .github/
 │   └── assets/
 │       ├── meowlogo.png
@@ -194,10 +190,10 @@ If an attempt is detected the owner receives a DM alert with the user's name, ID
 |------|----------|---------|---------|
 | 69 | UDP | TFTP | Serves firmware and config files to the phone on boot |
 | 70 | TCP | HTTP | Serves XML pages, directory, logo and health check to the phone |
-| 2000 | TCP | Asterisk SCCP | SCCP/Skinny — both phone lines register here |
-| 5060 | UDP | Asterisk PJSIP | SIPcord trunk — Asterisk registers to SIPcord on behalf of line 2 |
-| 5038 | TCP | Asterisk AMI | Manager Interface — used internally by fetch.py only, not exposed externally |
-| 10000–10020 | UDP | Asterisk RTP | Audio media streams for calls (supports up to 10 simultaneous) |
+| 80 | TCP | FreePBX HTTP | FreePBX web UI for PBX configuration |
+| 5038 | TCP | Asterisk AMI | Manager Interface — used internally by fetch.py; should be bound to localhost or otherwise restricted (e.g. firewall / AMI permit/deny) |
+| 5060 | UDP | Asterisk SIP/PJSIP | Phone registration and trunk signalling |
+| 10000–20000 | UDP | Asterisk RTP | Audio media streams for calls |
 
 ---
 
