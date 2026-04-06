@@ -156,6 +156,7 @@ All options are set via `.env` - no need to edit the code. See `.env.example` fo
 Meow/
 ├── bot/
 │   └── fetch.py                       # Main script
+├── freepbx/                           # FreePBX runtime data (populated by container, gitignored)
 ├── tftp/
 │   ├── OS79XX.TXT
 │   ├── dialplan.xml
@@ -241,7 +242,7 @@ status and then inspect the file (e.g. `cat XMLDefault.cnf.xml`). A failure prin
 ### TFTP networking (`network_mode: host`)
 
 The `tftp` service uses `network_mode: host` (no `ports:` mapping) for the same
-reason `asterisk` does: TFTP is a two-phase UDP protocol. The client sends the
+reason `freepbx` does: TFTP is a two-phase UDP protocol. The client sends the
 initial RRQ to port 69, but **all subsequent data packets come from a random
 ephemeral port** chosen by `in.tftpd` at transfer time.
 
@@ -258,7 +259,7 @@ requiring any special kernel modules.
 ### TFTP "Permission denied"
 
 **Why this happens:** The host directory bound to `/data`
-(`/mnt/pool/Apps/Calico/Meow/tftp`) is typically created with mode `0770`
+(`tftp/`) is typically created with mode `0770`
 (owner + group only). The `in.tftpd` process runs as root to bind UDP/69 but
 drops privileges to an unprivileged user for file access (`--secure` mode), and
 that user has no read or execute permission under `0770`.

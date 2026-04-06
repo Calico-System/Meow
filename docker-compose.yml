@@ -29,7 +29,7 @@ services:
         exit "${EXIT_STATUS}"
     volumes:
       # Firmware, dialplan, and SCCP config files
-      - /mnt/pool/Apps/Calico/Meow/tftp:/data
+      - ./tftp:/data
 
   # FreePBX — web-managed PBX (Asterisk + FreePBX GUI + MariaDB, all-in-one)
   # Configure extensions, trunks, and routes via the FreePBX web UI.
@@ -42,8 +42,8 @@ services:
       - VIRTUAL_PROTO=http
       - VIRTUAL_PORT=80
     volumes:
-      - /mnt/pool/Apps/Calico/Meow/freepbx/data:/data
-      - /mnt/pool/Apps/Calico/Meow/freepbx/logs:/var/log
+      - ./freepbx/data:/data
+      - ./freepbx/logs:/var/log
     healthcheck:
       test: ["CMD", "asterisk", "-rx", "core show version"]
       interval: 10s
@@ -60,11 +60,11 @@ services:
     restart: unless-stopped
     volumes:
       # fetch.py lives in bot/
-      - /mnt/pool/Apps/Calico/Meow/bot:/app
+      - ./bot:/app
       # Static files (logo.bmp) and runtime output (speedtest cache)
-      - /mnt/pool/Apps/Calico/Meow/http:/output
+      - ./http:/output
     working_dir: /app
     command: python fetch.py
     env_file:
       # Copy .env.example to .env and fill in your values
-      - /mnt/pool/Apps/Calico/Meow/.env
+      - ./.env
